@@ -208,9 +208,6 @@ function attachFormListeners(mode, recordId) {
         saveButton: document.getElementById('save-button'),
     };
 
-    const formatCurrency = (value) => `R$ ${parseFloat(value || 0).toFixed(2).replace('.', ',')}`;
-    const formatPercent = (value) => `${parseFloat(value || 0).toFixed(2).replace('.', ',')}%`;
-
     // --- LÓGICA DE CÁLCULO ---
 
     const checkCustoDivergence = () => {
@@ -449,10 +446,10 @@ function attachFormListeners(mode, recordId) {
                 id_anuncio: elements.idAnuncio.value,
                 quantidade: parseInt(elements.quantidade.value, 10),
                 custo_unitario: parseFloat(elements.custoUnitario.value),
-                custo_total: parseFloat(elements.custoTotal.value.replace('R$', '').replace(',', '.')),
+                custo_total: parseCurrency(elements.custoTotal.value),
                 aliquota: parseFloat(elements.aliquota.value),
-                tarifa_fixa_classico: parseFloat(elements.tarifaFixaClassico.value.replace('R$', '').replace(',', '.')),
-                tarifa_fixa_premium: parseFloat(elements.tarifaFixaPremium.value.replace('R$', '').replace(',', '.')),
+                tarifa_fixa_classico: parseCurrency(elements.tarifaFixaClassico.value),
+                tarifa_fixa_premium: parseCurrency(elements.tarifaFixaPremium.value),
                 parcelamento: parseFloat(elements.parcelamento.value),
                 outros: parseFloat(elements.outros.value),
                 regra_comissao: elements.regraComissao.value,
@@ -460,14 +457,14 @@ function attachFormListeners(mode, recordId) {
                 catalogo_buybox: elements.catalogoBuybox.checked,
                 venda_classico: parseFloat(elements.vendaClassico.value),
                 frete_classico: parseFloat(elements.freteClassico.value),
-                repasse_classico: parseFloat(elements.repasseClassico.value.replace('R$', '').replace(',', '.')),
-                lucro_classico: parseFloat(elements.lucroRsClassico.value.replace('R$', '').replace(',', '.')),
-                margem_classico: parseFloat(elements.margemClassico.value.replace('%', '').replace(',', '.')),
+                repasse_classico: parseCurrency(elements.repasseClassico.value),
+                lucro_classico: parseCurrency(elements.lucroRsClassico.value),
+                margem_classico: parsePercent(elements.margemClassico.value),
                 venda_premium: parseFloat(elements.vendaPremium.value),
                 frete_premium: parseFloat(elements.fretePremium.value),
-                repasse_premium: parseFloat(elements.repassePremium.value.replace('R$', '').replace(',', '.')),
-                lucro_premium: parseFloat(elements.lucroRsPremium.value.replace('R$', '').replace(',', '.')),
-                margem_premium: parseFloat(elements.margemPremium.value.replace('%', '').replace(',', '.')),
+                repasse_premium: parseCurrency(elements.repassePremium.value),
+                lucro_premium: parseCurrency(elements.lucroRsPremium.value),
+                margem_premium: parsePercent(elements.margemPremium.value),
             };
             
             const url = mode === 'edit' ? `/api/precificacao/atualizar/${currentPricingId}` : '/api/precificacao/salvar';

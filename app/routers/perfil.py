@@ -10,35 +10,24 @@ router = APIRouter(
 @router.get("/meus-dados", response_model=models.UserProfile)
 async def get_my_profile_data(user: dict = Depends(dependencies.get_current_user)):
     """Recupera os dados de perfil do usuário logado."""
-    query = f"SELECT * FROM `{services.TABLE_USUARIOS}` WHERE email = @email"
-    job_config = services.bigquery.QueryJobConfig(query_parameters=[services.bigquery.ScalarQueryParameter("email", "STRING", user['email'])])
-    results = [dict(row) for row in services.client.query(query, job_config=job_config)]
-    if not results:
+    user_data = services.get_user_by_email(user['email'])
+    if not user_data:
         raise HTTPException(status_code=404, detail="Usuário não encontrado.")
     
-    user_data = results[0]
+    # Converte datetimes para string, caso ainda não estejam
     for key, value in user_data.items():
         if isinstance(value, (services.datetime, services.date)):
             user_data[key] = value.isoformat()
-    
+            
     return user_data
 
 @router.post("/meus-dados", status_code=200)
 async def update_my_profile_data(update_data: models.UserProfileUpdate, user: dict = Depends(dependencies.get_current_user)):
     """Atualiza os dados de perfil do usuário logado."""
     user_email = user.get('email')
-    query = f"""
-        UPDATE `{services.TABLE_USUARIOS}`
-        SET telefone = @telefone, departamento = @departamento
-        WHERE email = @email
-    """
-    params = [
-        services.bigquery.ScalarQueryParameter("telefone", "STRING", update_data.telefone),
-        services.bigquery.ScalarQueryParameter("departamento", "STRING", update_data.departamento),
-        services.bigquery.ScalarQueryParameter("email", "STRING", user_email),
-    ]
-    services.client.query(query, job_config=services.bigquery.QueryJobConfig(query_parameters=params)).result()
-    services.log_action(user_email, "PROFILE_UPDATED", {"telefone": update_data.telefone, "departamento": update_data.departamento})
+    updates = {"telefone": update_data.telefone, "departamento": update_data.departamento}
+    services.update_user_properties(user_email, updates)
+    services.log_action(user_email, "PROFILE_UPDATED", updates)
     return {"message": "Perfil atualizado com sucesso"}
 
 @router.post("/upload-foto")
@@ -54,21 +43,14 @@ async def upload_profile_picture(request: Request, file: UploadFile = File(...),
         blob = bucket.blob(blob_name)
         
         blob.upload_from_file(file.file, content_type=file.content_type)
-        
-        # Tornar o blob público para obter uma URL acessível
         blob.make_public()
         new_photo_url = blob.public_url
 
-        query = f"UPDATE `{services.TABLE_USUARIOS}` SET foto_url = @url WHERE email = @email"
-        params = [services.bigquery.ScalarQueryParameter("url", "STRING", new_photo_url), services.bigquery.ScalarQueryParameter("email", "STRING", user_email)]
-        services.client.query(query, job_config=services.bigquery.QueryJobConfig(query_parameters=params)).result()
+        services.update_user_properties(user_email, {"foto_url": new_photo_url})
         
-        # Atualiza a URL da foto na sessão do usuário
         if 'user' in request.session:
             request.session['user']['picture'] = new_photo_url
-            # Força o salvamento da sessão
             request.session.modified = True
-
 
         services.log_action(user_email, "PROFILE_PHOTO_UPLOADED")
         return {"new_photo_url": new_photo_url}

@@ -106,7 +106,7 @@
     <div id="app-modal" class="modal-overlay"></div>
 
     <script src="/static/app.js"></script>
-    <script>
+    <script src="/static/utils.js"></script> <script>
         document.addEventListener('DOMContentLoaded', () => {
             checkAuthStatusAndUpdateNav().then(user => {
                 if (user) {
@@ -160,8 +160,9 @@
                         const hideListMessage = () => {
                             messageContainer.style.display = 'none';
                         };
-                        const formatCurrency = (value) => `R$ ${parseFloat(value || 0).toFixed(2).replace('.', ',')}`;
-                        const formatPercent = (value) => `${parseFloat(value || 0).toFixed(2).replace('.', ',')}%`;
+                        
+                        // REMOVIDAS AS FUNÇÕES formatCurrency e formatPercent DESTE ARQUIVO
+
                         const renderProducts = (products) => {
                             productListContainer.innerHTML = '';
                             if (products.length === 0) {

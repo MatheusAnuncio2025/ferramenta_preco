@@ -2,7 +2,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import List, Optional
 from .. import models, services, dependencies
-from . import configuracoes, campanhas
 
 router = APIRouter(
     prefix="/api",
@@ -36,7 +35,7 @@ async def salvar_precificacao(data: models.PrecificacaoCore, user: dict = Depend
             elif isinstance(value, services.datetime): param_type = "TIMESTAMP"
             params.append(services.bigquery.ScalarQueryParameter(key, param_type, value))
 
-        services.client.query(query, job_config=services.bigquery.QueryJobConfig(query_parameters=params)).result()
+        services.execute_query(query, params)
         
         services.log_action(user_email, "SAVE_PRICING", {"id": record_id, "sku": data.sku})
         return {"message": "Precificação salva com sucesso!", "id": record_id}
@@ -55,57 +54,17 @@ async def listar_precificacoes(
     categoria: Optional[str]=None,
     user: dict = Depends(dependencies.get_current_user)
 ):
-    query = f"SELECT * FROM `{services.TABLE_PRECIFICACOES_SALVAS}`"
-    where_clauses = []
-    params = []
-
-    if marketplace:
-        where_clauses.append("LOWER(marketplace) = LOWER(@marketplace)")
-        params.append(services.bigquery.ScalarQueryParameter("marketplace", "STRING", marketplace))
-    if id_loja:
-        where_clauses.append("LOWER(id_loja) = LOWER(@id_loja)")
-        params.append(services.bigquery.ScalarQueryParameter("id_loja", "STRING", id_loja))
-    if sku:
-        where_clauses.append("LOWER(sku) LIKE LOWER(@sku)")
-        params.append(services.bigquery.ScalarQueryParameter("sku", "STRING", f"%{sku}%"))
-    if titulo:
-        where_clauses.append("LOWER(titulo) LIKE LOWER(@titulo)")
-        params.append(services.bigquery.ScalarQueryParameter("titulo", "STRING", f"%{titulo}%"))
-    
-    if plano == 'classico':
-        where_clauses.append("venda_classico > 0")
-    elif plano == 'premium':
-        where_clauses.append("venda_premium > 0")
-
-    if categoria:
-        where_clauses.append("LOWER(categoria_precificacao) = LOWER(@categoria)")
-        params.append(services.bigquery.ScalarQueryParameter("categoria", "STRING", categoria))
-
-    if where_clauses:
-        query += " WHERE " + " AND ".join(where_clauses)
-    query += " ORDER BY data_calculo DESC LIMIT 100"
-    
-    job_config = services.bigquery.QueryJobConfig(query_parameters=params)
-    results = [dict(row) for row in services.client.query(query, job_config=job_config)]
-
-    for r in results:
-        for key, value in r.items():
-            if isinstance(value, (services.datetime, services.date)):
-                r[key] = value.isoformat()
-    return results
+    filters = {
+        "marketplace": marketplace, "id_loja": id_loja, "sku": sku,
+        "titulo": titulo, "plano": plano, "categoria": categoria
+    }
+    return services.get_filtered_precificacoes(filters)
 
 @router.get("/precificacao/item/{id}", response_model=dict)
 async def get_precificacao_item(id: str, user: dict = Depends(dependencies.get_current_user)):
-    query = f"SELECT * FROM `{services.TABLE_PRECIFICACOES_SALVAS}` WHERE id = @id"
-    results = [dict(row) for row in services.client.query(query, job_config=services.bigquery.QueryJobConfig(query_parameters=[services.bigquery.ScalarQueryParameter("id", "STRING", id)]))]
-    if not results:
+    item = services.get_precificacao_by_id(id)
+    if not item:
         raise HTTPException(status_code=404, detail="Registro não encontrado")
-    item = results[0]
-
-    for key, value in item.items():
-        if isinstance(value, (services.datetime, services.date)):
-            item[key] = value.isoformat()
-            
     return item
 
 @router.put("/precificacao/atualizar/{id}", status_code=200)
@@ -122,7 +81,6 @@ async def atualizar_precificacao(id: str, data: models.PrecificacaoCore, user: d
         query = f"UPDATE `{services.TABLE_PRECIFICACOES_SALVAS}` SET {update_sets} WHERE id = @id"
 
         params = [services.bigquery.ScalarQueryParameter("id", "STRING", id)]
-        
         for key, value in new_data_dict.items():
             param_type = "STRING"
             if isinstance(value, bool): param_type = "BOOL"
@@ -131,7 +89,7 @@ async def atualizar_precificacao(id: str, data: models.PrecificacaoCore, user: d
             elif isinstance(value, services.datetime): param_type = "TIMESTAMP"
             params.append(services.bigquery.ScalarQueryParameter(key, param_type, value))
 
-        services.client.query(query, job_config=services.bigquery.QueryJobConfig(query_parameters=params)).result()
+        services.execute_query(query, params)
         
         detalhes_alteracao = {}
         for key, new_value in new_data_dict.items():
@@ -140,8 +98,8 @@ async def atualizar_precificacao(id: str, data: models.PrecificacaoCore, user: d
             if isinstance(new_value, float) or isinstance(old_value, float):
                 if abs(float(new_value or 0) - float(old_value or 0)) > 1e-6:
                     is_different = True
-            elif old_value != new_value:
-                is_different = True
+            elif str(old_value) != str(new_value):
+                 is_different = True
 
             if is_different and key not in ['data_calculo', 'calculado_por']:
                  detalhes_alteracao[key] = {"old_value": old_value, "new_value": new_value}
@@ -160,25 +118,26 @@ async def atualizar_precificacao(id: str, data: models.PrecificacaoCore, user: d
 @router.delete("/precificacao/excluir/{id}", status_code=204)
 async def excluir_precificacao(id: str, user: dict = Depends(dependencies.get_current_user)):
     user_email = user.get('email')
-    services.client.query(f"DELETE FROM `{services.TABLE_PRECIFICACOES_CAMPANHA}` WHERE precificacao_base_id = @id", job_config=services.bigquery.QueryJobConfig(query_parameters=[services.bigquery.ScalarQueryParameter("id", "STRING", id)])).result()
-    services.client.query(f"DELETE FROM `{services.TABLE_PRECIFICACOES_SALVAS}` WHERE id = @id", job_config=services.bigquery.QueryJobConfig(query_parameters=[services.bigquery.ScalarQueryParameter("id", "STRING", id)])).result()
+    services.delete_precificacao_and_campaigns(id)
     services.log_action(user_email, "DELETE_PRICING", {"id": id})
 
 # --- Rotas de Dados Auxiliares ---
 
 @router.get("/categorias-precificacao")
 async def get_categorias_precificacao(user: dict = Depends(dependencies.get_current_user)):
-    query = f"SELECT * FROM `{services.TABLE_CATEGORIAS_PRECIFICACAO}` ORDER BY nome"
-    return [dict(row) for row in services.client.query(query)]
+    return services.get_all_precificacao_categories()
     
 @router.get("/dados-para-calculo", response_model=models.DadosCalculoResponse)
 async def get_dados_para_calculo(sku: str, loja_id: str, user: dict = Depends(dependencies.get_current_user)):
     produto_data = services.fetch_product_data(sku)
     if not produto_data: 
         produto_data = {"sku": sku}
-    # Corrigido para chamar a função do roteador de configurações
-    config_loja_data = await configuracoes.get_loja_detalhes(loja_id, user)
-    return models.DadosCalculoResponse(produto=models.ProdutoDados(**produto_data), config_loja=config_loja_data)
+    
+    config_loja_data = services.get_loja_details(loja_id)
+    return models.DadosCalculoResponse(
+        produto=models.ProdutoDados(**produto_data), 
+        config_loja=models.LojaConfigDetalhes(**config_loja_data)
+    )
 
 # --- Rotas de Precificação de Campanha ---
 
@@ -193,11 +152,7 @@ async def salvar_precificacao_campanha(data: models.PrecificacaoCampanhaPayload,
             row_data.pop("precificacao_base_id", None)
             row_data.pop("campanha_id", None)
             set_clauses = [f'T.{k} = @{k}' for k in row_data if k != 'id']
-            query = f"""
-                UPDATE `{services.TABLE_PRECIFICACOES_CAMPANHA}` T
-                SET {', '.join(set_clauses)}
-                WHERE T.id = @id
-            """
+            query = f"UPDATE `{services.TABLE_PRECIFICACOES_CAMPANHA}` T SET {', '.join(set_clauses)} WHERE T.id = @id"
         else:
             row_data["id"] = str(services.uuid.uuid4())
             row_data.update({"data_criacao": services.datetime.utcnow(), "criado_por": user_email})
@@ -215,7 +170,7 @@ async def salvar_precificacao_campanha(data: models.PrecificacaoCampanhaPayload,
             elif isinstance(value, services.date): param_type = "DATE"
             params.append(services.bigquery.ScalarQueryParameter(key, param_type, value))
 
-        services.client.query(query, job_config=services.bigquery.QueryJobConfig(query_parameters=params)).result()
+        services.execute_query(query, params)
         
         action = "UPDATE_CAMPAIGN_PRICE" if is_update else "SAVE_CAMPAIGN_PRICE"
         services.log_action(user_email, action, {"id": row_data["id"]})
@@ -230,38 +185,24 @@ async def get_data_for_edit_page(id: str, user: dict = Depends(dependencies.get_
     try:
         precificacao_base = await get_precificacao_item(id, user)
         
-        query_loja = f"SELECT id FROM `{services.TABLE_LOJAS_CONFIG}` WHERE marketplace = @marketplace AND id_loja = @id_loja"
-        params_loja = [
-            services.bigquery.ScalarQueryParameter("marketplace", "STRING", precificacao_base['marketplace']),
-            services.bigquery.ScalarQueryParameter("id_loja", "STRING", precificacao_base['id_loja']),
-        ]
-        loja_result = list(services.client.query(query_loja, job_config=services.bigquery.QueryJobConfig(query_parameters=params_loja)))
-        if not loja_result: raise HTTPException(status_code=404, detail="Configuração da loja não encontrada.")
+        loja_id = services.get_loja_id_by_marketplace_and_loja(
+            precificacao_base['marketplace'], precificacao_base['id_loja']
+        )
+        if not loja_id: raise HTTPException(status_code=404, detail="Configuração da loja não encontrada.")
         
-        loja_id = loja_result[0]['id']
-        config_loja = await configuracoes.get_loja_detalhes(loja_id, user)
+        config_loja = services.get_loja_details(loja_id)
 
         produto_atual_data = services.fetch_product_data(precificacao_base['sku'])
         if not produto_atual_data: produto_atual_data = {"sku": precificacao_base['sku']}
 
-        query_campanhas_vinculadas = f"""
-            SELECT pc.*, c.nome as nome_campanha
-            FROM `{services.TABLE_PRECIFICACOES_CAMPANHA}` pc
-            JOIN `{services.TABLE_CAMPANHAS_ML}` c ON pc.campanha_id = c.id
-            WHERE pc.precificacao_base_id = @base_id
-        """
-        params_campanhas = [services.bigquery.ScalarQueryParameter("base_id", "STRING", id)]
-        campanhas_vinculadas_results = services.client.query(query_campanhas_vinculadas, job_config=services.bigquery.QueryJobConfig(query_parameters=params_campanhas)).result()
-        campanhas_vinculadas = [dict(row) for row in campanhas_vinculadas_results]
-        for c in campanhas_vinculadas:
-            for key, value in c.items():
-                if isinstance(value, (services.datetime, services.date)): c[key] = value.isoformat()
-
-        campanhas_ativas = await campanhas.get_active_campaigns(user)
+        campanhas_vinculadas = services.get_linked_campaigns(id)
+        
+        campanhas_ativas_raw = services.get_active_campaigns()
+        campanhas_ativas = [models.CampanhaML(**row) for row in campanhas_ativas_raw]
 
         return models.EditPageData(
             precificacao_base=precificacao_base,
-            config_loja=config_loja,
+            config_loja=models.LojaConfigDetalhes(**config_loja),
             produto_atual=models.ProdutoDados(**produto_atual_data),
             campanhas_vinculadas=campanhas_vinculadas,
             campanhas_ativas=[c.model_dump() for c in campanhas_ativas]
@@ -272,21 +213,9 @@ async def get_data_for_edit_page(id: str, user: dict = Depends(dependencies.get_
 
 @router.get("/precificacao-campanha/item/{id}")
 async def get_campaign_pricing_item(id: str, user: dict = Depends(dependencies.get_current_user)):
-    query = f"""
-        SELECT pc.*, c.nome as nome_campanha, pb.sku, pb.titulo
-        FROM `{services.TABLE_PRECIFICACOES_CAMPANHA}` pc
-        JOIN `{services.TABLE_CAMPANHAS_ML}` c ON pc.campanha_id = c.id
-        JOIN `{services.TABLE_PRECIFICACOES_SALVAS}` pb ON pc.precificacao_base_id = pb.id
-        WHERE pc.id = @id
-    """
-    params = [services.bigquery.ScalarQueryParameter("id", "STRING", id)]
-    results = [dict(row) for row in services.client.query(query, job_config=services.bigquery.QueryJobConfig(query_parameters=params))]
-    if not results: raise HTTPException(status_code=404, detail="Precificação de campanha não encontrada.")
-    
-    item = results[0]
-    for key, value in item.items():
-        if isinstance(value, (services.datetime, services.date)): item[key] = value.isoformat()
-            
+    item = services.get_campaign_pricing_details(id)
+    if not item: 
+        raise HTTPException(status_code=404, detail="Precificação de campanha não encontrada.")
     return item
 
 # --- Rota de Histórico ---
@@ -294,14 +223,7 @@ async def get_campaign_pricing_item(id: str, user: dict = Depends(dependencies.g
 @router.get("/historico")
 async def get_historico(user: dict = Depends(dependencies.get_historico_viewer_user)):
     try:
-        query = f"SELECT * FROM `{services.TABLE_LOGS}` ORDER BY timestamp DESC LIMIT 200"
-        results = [dict(row) for row in services.client.query(query)]
-        
-        for r in results:
-            for key, value in r.items():
-                if isinstance(value, (services.datetime, services.date)):
-                    r[key] = value.isoformat()
-        return results
+        return services.get_history_logs()
     except Exception as e:
         print(f"Erro ao buscar histórico: {e}")
         raise HTTPException(status_code=500, detail="Erro ao buscar os dados do histórico.")

@@ -17,12 +17,6 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 15px;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        .rules-header h3 {
-            margin-right: auto;
         }
 
         .rules-table {
@@ -49,34 +43,32 @@
             border-radius: 4px;
             border: 1px solid var(--border-color);
             font-size: 0.95rem;
+            background-color: #f8f9fa;
         }
 
-        .rules-table input:disabled {
-            background-color: #f7f9fa;
-            cursor: not-allowed;
+        .rules-table tr.is-editing input {
+            background-color: var(--white-color);
         }
 
         .actions-cell {
             text-align: center;
-            width: 120px;
+            width: 150px;
+            white-space: nowrap;
         }
-
-        .delete-row-btn {
-            background-color: var(--danger-color);
-            color: white;
-            border: none;
+        
+        .action-btn {
             padding: 5px 10px;
             border-radius: 4px;
             cursor: pointer;
+            border: 1px solid transparent;
+            font-weight: 500;
+            margin: 0 2px;
         }
+        .edit-btn { background-color: var(--secondary-color); color: white; }
+        .save-btn { background-color: var(--primary-color); color: white; }
+        .cancel-btn { background-color: #f0f2f5; }
+        .delete-btn { background-color: var(--danger-color); color: white; }
 
-        .delete-row-btn:hover {
-            background-color: var(--danger-hover-color);
-        }
-
-        .delete-row-btn:disabled {
-            background-color: #ccc;
-        }
     </style>
 </head>
 
@@ -111,10 +103,7 @@
             <div class="form-section rules-section">
                 <div class="rules-header">
                     <h3>Regras de Tarifa Fixa (Mercado Livre)</h3>
-                    <button id="save-tarifa-fixa-btn" class="app-button save-button"
-                        style="padding: 8px 15px;">Salvar</button>
-                    <button id="add-tarifa-fixa-btn" class="app-button"
-                        style="padding: 8px 15px; background-color: var(--secondary-color);">+ Adicionar</button>
+                    <button id="add-tarifa-fixa-btn" class="app-button" style="background-color: var(--secondary-color);">+ Adicionar</button>
                 </div>
                 <div style="overflow-x: auto;">
                     <table class="rules-table" id="tarifa-fixa-table">
@@ -125,7 +114,7 @@
                                 <th>Venda Máx. (R$)</th>
                                 <th>Taxa Fixa (R$)</th>
                                 <th>Taxa (%)</th>
-                                <th>Ações</th>
+                                <th class="actions-cell">Ações</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
@@ -136,10 +125,7 @@
             <div class="form-section rules-section">
                 <div class="rules-header">
                     <h3>Categorias de Precificação</h3>
-                    <button id="save-categorias-btn" class="app-button save-button"
-                        style="padding: 8px 15px;">Salvar</button>
-                    <button id="add-categoria-btn" class="app-button"
-                        style="padding: 8px 15px; background-color: var(--secondary-color);">+ Adicionar</button>
+                    <button id="add-categoria-btn" class="app-button" style="background-color: var(--secondary-color);">+ Adicionar</button>
                 </div>
                 <div style="overflow-x: auto;">
                     <table class="rules-table" id="categorias-table">
@@ -147,7 +133,7 @@
                             <tr>
                                 <th>Nome da Categoria</th>
                                 <th>Margem Padrão (%)</th>
-                                <th>Ações</th>
+                                <th class="actions-cell">Ações</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
@@ -158,10 +144,7 @@
             <div class="form-section rules-section">
                 <div class="rules-header">
                     <h3>Regras de Frete (Mercado Livre)</h3>
-                    <button id="save-frete-btn" class="app-button save-button"
-                        style="padding: 8px 15px;">Salvar</button>
-                    <button id="add-frete-btn" class="app-button"
-                        style="padding: 8px 15px; background-color: var(--secondary-color);">+ Adicionar</button>
+                    <button id="add-frete-btn" class="app-button" style="background-color: var(--secondary-color);">+ Adicionar</button>
                 </div>
                 <div style="overflow-x: auto;">
                     <table class="rules-table" id="frete-table">
@@ -172,7 +155,7 @@
                                 <th>Peso Mín. (g)</th>
                                 <th>Peso Máx. (g)</th>
                                 <th>Custo Frete (R$)</th>
-                                <th>Ações</th>
+                                <th class="actions-cell">Ações</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
@@ -184,37 +167,6 @@
 
     <div id="app-modal" class="modal-overlay"></div>
 
-    <template id="tarifa-fixa-row-template">
-        <tr>
-            <td><input type="text" class="rule-input" data-field="descricao" placeholder="Ex: Produtos < R$ 79"></td>
-            <td><input type="number" step="0.01" class="rule-input" data-field="min_venda" placeholder="0.00"></td>
-            <td><input type="number" step="0.01" class="rule-input" data-field="max_venda" placeholder="78.99"></td>
-            <td><input type="number" step="0.01" class="rule-input" data-field="taxa_fixa" placeholder="6.75"></td>
-            <td><input type="number" step="0.01" class="rule-input" data-field="taxa_percentual" placeholder="0"></td>
-            <td class="actions-cell"><button class="delete-row-btn">Excluir</button></td>
-        </tr>
-    </template>
-
-    <template id="categoria-row-template">
-        <tr>
-            <td><input type="text" class="rule-input" data-field="nome" placeholder="Ex: Eletrônicos"></td>
-            <td><input type="number" step="0.01" class="rule-input" data-field="margem_padrao" placeholder="Ex: 15.0">
-            </td>
-            <td class="actions-cell"><button class="delete-row-btn">Excluir</button></td>
-        </tr>
-    </template>
-
-    <template id="frete-row-template">
-        <tr>
-            <td><input type="number" step="0.01" class="rule-input" data-field="min_venda" placeholder="79.00"></td>
-            <td><input type="number" step="0.01" class="rule-input" data-field="max_venda" placeholder="99.99"></td>
-            <td><input type="number" class="rule-input" data-field="min_peso_g" placeholder="0"></td>
-            <td><input type="number" class="rule-input" data-field="max_peso_g" placeholder="300"></td>
-            <td><input type="number" step="0.01" class="rule-input" data-field="custo_frete" placeholder="11.97"></td>
-            <td class="actions-cell"><button class="delete-row-btn">Excluir</button></td>
-        </tr>
-    </template>
-
     <script src="/static/app.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
@@ -223,42 +175,177 @@
                     try {
                         const loader = document.getElementById('loader');
                         const content = document.getElementById('rules-content');
-                        const tabelas = {
-                            tarifaFixa: document.getElementById('tarifa-fixa-table').querySelector('tbody'),
-                            categorias: document.getElementById('categorias-table').querySelector('tbody'),
-                            frete: document.getElementById('frete-table').querySelector('tbody'),
-                        };
-                        const templates = {
-                            tarifaFixa: document.getElementById('tarifa-fixa-row-template'),
-                            categorias: document.getElementById('categoria-row-template'),
-                            frete: document.getElementById('frete-row-template'),
-                        };
-                        const botoesAdicionar = {
-                            tarifaFixa: document.getElementById('add-tarifa-fixa-btn'),
-                            categorias: document.getElementById('add-categoria-btn'),
-                            frete: document.getElementById('add-frete-btn'),
-                        };
-                        const botoesSalvar = {
-                            tarifaFixa: document.getElementById('save-tarifa-fixa-btn'),
-                            categorias: document.getElementById('save-categorias-btn'),
-                            frete: document.getElementById('save-frete-btn'),
+                        
+                        const ruleManager = (config) => {
+                            const tableBody = document.getElementById(config.tableId).querySelector('tbody');
+                            
+                            const getRowData = (row) => {
+                                const data = { id: row.dataset.id || null };
+                                config.fields.forEach(field => {
+                                    const input = row.querySelector(`[data-field="${field.name}"]`);
+                                    const value = input.value.trim();
+                                    data[field.name] = value === '' ? null : (field.type === 'number' ? parseFloat(value) : value);
+                                });
+                                return data;
+                            };
+
+                            const createRow = (data = {}) => {
+                                const tr = document.createElement('tr');
+                                tr.dataset.id = data.id || '';
+                                let cellsHtml = '';
+                                config.fields.forEach(f => {
+                                    cellsHtml += `<td><input type="${f.type}" step="0.01" class="rule-input" data-field="${f.name}" placeholder="${f.placeholder || ''}" readonly></td>`;
+                                });
+                                cellsHtml += `<td class="actions-cell"></td>`;
+                                tr.innerHTML = cellsHtml;
+                                
+                                Object.keys(data).forEach(key => {
+                                    const input = tr.querySelector(`[data-field="${key}"]`);
+                                    if(input) input.value = data[key] === null || data[key] === undefined ? '' : data[key];
+                                });
+
+                                return tr;
+                            };
+
+                            const setViewState = (row) => {
+                                row.classList.remove('is-editing');
+                                row.querySelectorAll('.rule-input').forEach(i => i.readOnly = true);
+                                const actionsCell = row.querySelector('.actions-cell');
+                                actionsCell.innerHTML = `
+                                    <button class="action-btn edit-btn">Editar</button>
+                                    <button class="action-btn delete-btn">Excluir</button>
+                                `;
+                            };
+
+                            const setEditState = (row) => {
+                                row.classList.add('is-editing');
+                                const originalData = {};
+                                row.querySelectorAll('.rule-input').forEach(i => {
+                                    i.readOnly = false;
+                                    originalData[i.dataset.field] = i.value;
+                                });
+                                row.dataset.original = JSON.stringify(originalData);
+                                const actionsCell = row.querySelector('.actions-cell');
+                                actionsCell.innerHTML = `
+                                    <button class="action-btn save-btn">Salvar</button>
+                                    <button class="action-btn cancel-btn">Cancelar</button>
+                                `;
+                            };
+
+                            const handleSave = async (row) => {
+                                const data = getRowData(row);
+                                const isNew = !data.id;
+                                const url = isNew ? config.endpoint : `${config.endpoint}/${data.id}`;
+                                const method = isNew ? 'POST' : 'PUT';
+                                
+                                row.style.opacity = '0.5';
+                                try {
+                                    const response = await fetch(url, {
+                                        method,
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify(data)
+                                    });
+                                    if (!response.ok) throw new Error((await response.json()).detail || 'Erro no servidor.');
+                                    
+                                    const savedData = await response.json();
+                                    row.dataset.id = savedData.id;
+                                    setViewState(row);
+                                } catch (error) {
+                                    showAppModal({ title: "Erro ao Salvar", bodyHtml: `<p>${error.message}</p>`, buttons: [{ text: "OK" }] });
+                                    handleCancel(row); // Reverte para o estado original
+                                } finally {
+                                    row.style.opacity = '1';
+                                }
+                            };
+                            
+                            const handleCancel = (row) => {
+                                if (!row.dataset.id) { // Se for uma linha nova, remove
+                                    row.remove();
+                                    return;
+                                }
+                                const originalData = JSON.parse(row.dataset.original);
+                                Object.keys(originalData).forEach(key => {
+                                    row.querySelector(`[data-field="${key}"]`).value = originalData[key];
+                                });
+                                setViewState(row);
+                            };
+
+                            const handleDelete = async (row) => {
+                                showAppModal({
+                                    title: "Confirmar Exclusão",
+                                    bodyHtml: "<p>Tem certeza que deseja excluir esta regra?</p>",
+                                    buttons: [
+                                        { text: "Cancelar", class: "secondary" },
+                                        {
+                                            text: "Confirmar", class: "delete",
+                                            onClick: async () => {
+                                                row.style.opacity = '0.5';
+                                                try {
+                                                    const response = await fetch(`${config.endpoint}/${row.dataset.id}`, { method: 'DELETE' });
+                                                    if (!response.ok) throw new Error('Falha ao excluir.');
+                                                    row.remove();
+                                                } catch(e) {
+                                                    showAppModal({ title: "Erro", bodyHtml: `<p>${e.message}</p>`, buttons: [{ text: "OK" }] });
+                                                    row.style.opacity = '1';
+                                                }
+                                            }
+                                        }
+                                    ]
+                                });
+                            };
+
+                            tableBody.addEventListener('click', (e) => {
+                                const row = e.target.closest('tr');
+                                if (!row) return;
+
+                                if (e.target.classList.contains('edit-btn')) setEditState(row);
+                                else if (e.target.classList.contains('save-btn')) handleSave(row);
+                                else if (e.target.classList.contains('cancel-btn')) handleCancel(row);
+                                else if (e.target.classList.contains('delete-btn')) handleDelete(row);
+                            });
+
+                            document.getElementById(config.addBtnId).addEventListener('click', () => {
+                                const newRow = createRow();
+                                tableBody.appendChild(newRow);
+                                setEditState(newRow);
+                                newRow.querySelector('.rule-input').focus();
+                            });
+                            
+                            return (data) => { // Render function
+                                tableBody.innerHTML = '';
+                                data.forEach(item => {
+                                    const row = createRow(item);
+                                    setViewState(row);
+                                    tableBody.appendChild(row);
+                                });
+                            };
                         };
 
-                        const renderTable = (key, data) => {
-                            const tbody = tabelas[key];
-                            const template = templates[key];
-                            tbody.innerHTML = '';
-                            data.forEach(rowData => {
-                                const clone = template.content.cloneNode(true);
-                                clone.querySelector('tr').dataset.id = rowData.id;
-                                const inputs = clone.querySelectorAll('.rule-input');
-                                inputs.forEach(input => {
-                                    const field = input.dataset.field;
-                                    input.value = rowData[field] === null || rowData[field] === undefined ? '' : rowData[field];
-                                });
-                                clone.querySelector('.delete-row-btn').onclick = (e) => e.target.closest('tr').remove();
-                                tbody.appendChild(clone);
-                            });
+                        const configs = {
+                            tarifaFixa: {
+                                tableId: 'tarifa-fixa-table', addBtnId: 'add-tarifa-fixa-btn', endpoint: '/api/regras-negocio/tarifa-fixa',
+                                fields: [
+                                    { name: 'descricao', type: 'text' }, { name: 'min_venda', type: 'number' }, { name: 'max_venda', type: 'number' },
+                                    { name: 'taxa_fixa', type: 'number' }, { name: 'taxa_percentual', type: 'number' }
+                                ]
+                            },
+                            categorias: {
+                                tableId: 'categorias-table', addBtnId: 'add-categoria-btn', endpoint: '/api/regras-negocio/categorias',
+                                fields: [{ name: 'nome', type: 'text' }, { name: 'margem_padrao', type: 'number' }]
+                            },
+                            frete: {
+                                tableId: 'frete-table', addBtnId: 'add-frete-btn', endpoint: '/api/regras-negocio/frete',
+                                fields: [
+                                    { name: 'min_venda', type: 'number' }, { name: 'max_venda', type: 'number' }, { name: 'min_peso_g', type: 'number' },
+                                    { name: 'max_peso_g', type: 'number' }, { name: 'custo_frete', type: 'number' }
+                                ]
+                            }
+                        };
+                        
+                        const renderers = {
+                            tarifaFixa: ruleManager(configs.tarifaFixa),
+                            categorias: ruleManager(configs.categorias),
+                            frete: ruleManager(configs.frete)
                         };
 
                         const loadRules = async () => {
@@ -266,9 +353,9 @@
                                 const response = await fetch('/api/regras-negocio');
                                 if (!response.ok) throw new Error('Falha ao carregar regras.');
                                 const data = await response.json();
-                                renderTable('tarifaFixa', data.REGRAS_TARIFA_FIXA_ML);
-                                renderTable('categorias', data.CATEGORIAS_PRECIFICACAO);
-                                renderTable('frete', data.REGRAS_FRETE_ML);
+                                renderers.tarifaFixa(data.REGRAS_TARIFA_FIXA_ML);
+                                renderers.categorias(data.CATEGORIAS_PRECIFICACAO);
+                                renderers.frete(data.REGRAS_FRETE_ML);
                                 loader.classList.add('hidden');
                                 content.classList.remove('hidden');
                             } catch (error) {
@@ -276,64 +363,11 @@
                             }
                         };
 
-                        const collectDataFromTable = (key) => {
-                            return Array.from(tabelas[key].querySelectorAll('tr')).map(row => {
-                                const rowData = { id: row.dataset.id || null };
-                                row.querySelectorAll('.rule-input').forEach(input => {
-                                    const field = input.dataset.field;
-                                    const valueStr = input.value.trim();
-                                    rowData[field] = input.type === 'number' ?
-                                        (valueStr === '' ? null : parseFloat(valueStr)) :
-                                        valueStr;
-                                });
-                                return rowData;
-                            });
-                        };
-
-                        const handleSave = async (key, buttonEl) => {
-                            const endpointMap = {
-                                tarifaFixa: '/api/regras-negocio/tarifa-fixa',
-                                categorias: '/api/regras-negocio/categorias',
-                                frete: '/api/regras-negocio/frete'
-                            };
-                            const payload = collectDataFromTable(key);
-                            buttonEl.classList.add('is-loading');
-                            buttonEl.disabled = true;
-                            try {
-                                const response = await fetch(endpointMap[key], {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify(payload),
-                                });
-                                if (!response.ok) throw new Error((await response.json()).detail || 'Erro no servidor');
-                                showAppModal({ title: 'Sucesso!', bodyHtml: '<p>Regras salvas com sucesso!</p>', buttons: [{ text: 'OK', class: 'primary' }] });
-                            } catch (error) {
-                                showAppModal({ title: 'Erro ao Salvar', bodyHtml: `<p>${error.message}</p>`, buttons: [{ text: 'OK', class: 'primary' }] });
-                            } finally {
-                                buttonEl.classList.remove('is-loading');
-                                buttonEl.disabled = false;
-                            }
-                        };
-
-                        Object.keys(botoesSalvar).forEach(key => {
-                            botoesSalvar[key].addEventListener('click', () => handleSave(key, botoesSalvar[key]));
-                        });
-
-                        Object.keys(botoesAdicionar).forEach(key => {
-                            botoesAdicionar[key].addEventListener('click', () => {
-                                const clone = templates[key].content.cloneNode(true);
-                                clone.querySelector('.delete-row-btn').onclick = (e) => e.target.closest('tr').remove();
-                                tabelas[key].appendChild(clone);
-                            });
-                        });
-                        
                         setupLogoutButton();
                         loadRules().then(() => {
                             if (user.role !== 'admin') {
-                                Object.values(botoesSalvar).forEach(btn => btn.style.display = 'none');
-                                Object.values(botoesAdicionar).forEach(btn => btn.style.display = 'none');
-                                document.querySelectorAll('.rule-input').forEach(input => input.disabled = true);
-                                document.querySelectorAll('.delete-row-btn').forEach(btn => btn.style.display = 'none');
+                                Object.values(configs).forEach(c => document.getElementById(c.addBtnId).style.display = 'none');
+                                document.querySelectorAll('.actions-cell').forEach(cell => cell.style.display = 'none');
                             }
                         });
 

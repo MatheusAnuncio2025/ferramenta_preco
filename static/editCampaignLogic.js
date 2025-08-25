@@ -15,9 +15,6 @@ document.addEventListener('DOMContentLoaded', () => {
         saveButton: document.getElementById('save-campaign-price-btn')
     };
 
-    const formatCurrency = (value) => `R$ ${parseFloat(value || 0).toFixed(2).replace('.', ',')}`;
-    const formatPercent = (value) => `${parseFloat(value || 0).toFixed(2).replace('.', ',')}%`;
-
     /**
      * Busca todos os dados necessários do backend para a edição.
      */
@@ -211,16 +208,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 campanha_id: precificacaoCampanha.campanha_id,
                 desconto_classico_tipo: document.getElementById('desconto-tipo-classico').value,
                 desconto_classico_valor: parseFloat(document.getElementById('desconto-valor-classico').value) || null,
-                venda_final_classico: parseFloat(document.getElementById('valor-venda-classico').value.replace('R$', '').replace(',', '.')) || 0,
-                margem_final_classico: parseFloat(document.getElementById('margem-lucro-perc-classico').value.replace('%', '').replace(',', '.')) || 0,
-                lucro_final_classico: parseFloat(document.getElementById('lucro-rs-classico').value.replace('R$', '').replace(',', '.')) || 0,
-                repasse_final_classico: parseFloat(document.getElementById('repasse-classico').value.replace('R$', '').replace(',', '.')) || 0,
+                venda_final_classico: parseCurrency(document.getElementById('valor-venda-classico').value),
+                margem_final_classico: parsePercent(document.getElementById('margem-lucro-perc-classico').value),
+                lucro_final_classico: parseCurrency(document.getElementById('lucro-rs-classico').value),
+                repasse_final_classico: parseCurrency(document.getElementById('repasse-classico').value),
                 desconto_premium_tipo: document.getElementById('desconto-tipo-premium').value,
                 desconto_premium_valor: parseFloat(document.getElementById('desconto-valor-premium').value) || null,
-                venda_final_premium: parseFloat(document.getElementById('valor-venda-premium').value.replace('R$', '').replace(',', '.')) || 0,
-                margem_final_premium: parseFloat(document.getElementById('margem-lucro-perc-premium').value.replace('%', '').replace(',', '.')) || 0,
-                lucro_final_premium: parseFloat(document.getElementById('lucro-rs-premium').value.replace('R$', '').replace(',', '.')) || 0,
-                repasse_final_premium: parseFloat(document.getElementById('repasse-premium').value.replace('R$', '').replace(',', '.')) || 0,
+                venda_final_premium: parseCurrency(document.getElementById('valor-venda-premium').value),
+                margem_final_premium: parsePercent(document.getElementById('margem-lucro-perc-premium').value),
+                lucro_final_premium: parseCurrency(document.getElementById('lucro-rs-premium').value),
+                repasse_final_premium: parseCurrency(document.getElementById('repasse-premium').value),
             };
 
             const response = await fetch('/api/precificacao-campanha/salvar', {

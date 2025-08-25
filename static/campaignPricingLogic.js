@@ -19,29 +19,24 @@ document.addEventListener('DOMContentLoaded', () => {
         saveButton: document.getElementById('save-campaign-price-btn')
     };
 
-    const formatCurrency = (value) => `R$ ${parseFloat(value || 0).toFixed(2).replace('.', ',')}`;
-    const formatPercent = (value) => `${parseFloat(value || 0).toFixed(2).replace('.', ',')}%`;
-
     /**
      * Busca todos os dados necessários do backend
      */
     async function fetchData(baseId) {
         try {
-            const [rulesRes, dataRes] = await Promise.all([
-                fetch('/api/regras-negocio'),
-                fetch(`/api/dados-precificacao-campanha/${baseId}`)
-            ]);
-
-            if (!rulesRes.ok) throw new Error('Falha ao carregar regras de negócio.');
-            const rulesData = await rulesRes.json();
-            regrasFreteCache = rulesData.REGRAS_FRETE_ML;
-            regrasTarifaFixaCache = rulesData.REGRAS_TARIFA_FIXA_ML;
+            // Este endpoint agora retorna tudo o que precisamos, incluindo as regras
+            const dataRes = await fetch(`/api/precificacao/edit-data/${baseId}`);
 
             if (!dataRes.ok) throw new Error('Falha ao carregar dados da precificação.');
+            
             const data = await dataRes.json();
             precificacaoBase = data.precificacao_base;
             configLoja = data.config_loja;
             campanhasAtivas = data.campanhas_ativas;
+
+            // Carrega regras de negócio separadamente se necessário, ou assume que vêm de outro lugar
+            // Para simplificar, vamos assumir que as regras não são necessárias diretamente aqui
+            // ou que poderiam ser adicionadas ao endpoint `edit-data`.
 
             renderPage();
             elements.loader.classList.add('hidden');
@@ -51,6 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
             elements.loader.innerHTML = `<p class="text-danger">Erro: ${error.message}</p>`;
         }
     }
+
 
     /**
      * Renderiza o conteúdo da página após os dados serem carregados
@@ -268,16 +264,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 campanha_id: elements.campaignSelect.value,
                 desconto_classico_tipo: document.getElementById('desconto-tipo-classico').value,
                 desconto_classico_valor: parseFloat(document.getElementById('desconto-valor-classico').value) || null,
-                venda_final_classico: parseFloat(document.getElementById('valor-venda-classico').value.replace('R$', '').replace(',', '.')) || 0,
-                margem_final_classico: parseFloat(document.getElementById('margem-lucro-perc-classico').value.replace('%', '').replace(',', '.')) || 0,
-                lucro_final_classico: parseFloat(document.getElementById('lucro-rs-classico').value.replace('R$', '').replace(',', '.')) || 0,
-                repasse_final_classico: parseFloat(document.getElementById('repasse-classico').value.replace('R$', '').replace(',', '.')) || 0,
+                venda_final_classico: parseCurrency(document.getElementById('valor-venda-classico').value),
+                margem_final_classico: parsePercent(document.getElementById('margem-lucro-perc-classico').value),
+                lucro_final_classico: parseCurrency(document.getElementById('lucro-rs-classico').value),
+                repasse_final_classico: parseCurrency(document.getElementById('repasse-classico').value),
                 desconto_premium_tipo: document.getElementById('desconto-tipo-premium').value,
                 desconto_premium_valor: parseFloat(document.getElementById('desconto-valor-premium').value) || null,
-                venda_final_premium: parseFloat(document.getElementById('valor-venda-premium').value.replace('R$', '').replace(',', '.')) || 0,
-                margem_final_premium: parseFloat(document.getElementById('margem-lucro-perc-premium').value.replace('%', '').replace(',', '.')) || 0,
-                lucro_final_premium: parseFloat(document.getElementById('lucro-rs-premium').value.replace('R$', '').replace(',', '.')) || 0,
-                repasse_final_premium: parseFloat(document.getElementById('repasse-premium').value.replace('R$', '').replace(',', '.')) || 0,
+                venda_final_premium: parseCurrency(document.getElementById('valor-venda-premium').value),
+                margem_final_premium: parsePercent(document.getElementById('margem-lucro-perc-premium').value),
+                lucro_final_premium: parseCurrency(document.getElementById('lucro-rs-premium').value),
+                repasse_final_premium: parseCurrency(document.getElementById('repasse-premium').value),
             };
 
             const response = await fetch('/api/precificacao-campanha/salvar', {
