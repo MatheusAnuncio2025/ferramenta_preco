@@ -180,7 +180,7 @@
                                 Array.from(row.querySelectorAll('[data-field]')).forEach(input => {
                                     const field = input.dataset.field;
                                     if (rowData[field] !== null && rowData[field] !== undefined) {
-                                        input.value = input.type === 'date'
+                                        input.value = input.type === 'date' && rowData[field]
                                             ? new Date(rowData[field]).toISOString().split('T')[0]
                                             : rowData[field];
                                     }
@@ -230,10 +230,12 @@
                                     body: JSON.stringify(payload),
                                 });
                                 if (!response.ok) throw new Error((await response.json()).detail || 'Erro no servidor.');
-                                showAppModal({ title: 'Sucesso!', bodyHtml: '<p>Campanhas salvas com sucesso!</p>', buttons: [{ text: 'OK', class: 'primary' }] });
-                                loadCampaigns();
+                                // SUBSTITUIÇÃO: showAppModal por showToast
+                                showToast('Campanhas salvas com sucesso!');
+                                // ATUALIZAÇÃO AJAX
+                                await loadCampaigns();
                             } catch (error) {
-                                showAppModal({ title: 'Erro ao Salvar', bodyHtml: `<p>${error.message}</p>`, buttons: [{ text: 'OK', class: 'primary' }] });
+                                showToast(error.message, 'error');
                             } finally {
                                 saveBtn.classList.remove('is-loading');
                                 saveBtn.disabled = false;

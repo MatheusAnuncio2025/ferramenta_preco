@@ -15,9 +15,20 @@ router = APIRouter(
 async def get_regras_negocio(user: dict = Depends(dependencies.get_current_user)):
     """Recupera todas as regras de negócio."""
     try:
+        # CORREÇÃO: Utiliza a função implementada em services.py
         return services.get_all_business_rules()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao buscar regras: {e}")
+
+@router.get("/tarifa-fixa", response_model=List[models.RegraTarifaFixa])
+async def get_regras_tarifa_fixa_apenas(user: dict = Depends(dependencies.get_current_user)):
+    """Recupera apenas as regras de tarifa fixa do Mercado Livre."""
+    try:
+        # NOVO: Endpoint específico para a tela de configurações
+        all_rules = services.get_all_business_rules()
+        return all_rules.get("REGRAS_TARIFA_FIXA_ML", [])
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao buscar regras de tarifa fixa: {e}")
 
 # --- Endpoints para Regras de Tarifa Fixa ---
 

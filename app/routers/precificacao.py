@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import List, Optional
 from .. import models, services, dependencies
+import traceback
 
 router = APIRouter(
     prefix="/api",
@@ -40,11 +41,11 @@ async def salvar_precificacao(data: models.PrecificacaoCore, user: dict = Depend
         services.log_action(user_email, "SAVE_PRICING", {"id": record_id, "sku": data.sku})
         return {"message": "Precificação salva com sucesso!", "id": record_id}
     except Exception as e:
-        services.traceback.print_exc()
+        traceback.print_exc()
         services.log_action(user_email, "SAVE_PRICING_FAILED", {"sku": data.sku, "error": str(e)})
         raise HTTPException(status_code=500, detail=f"Erro ao salvar no banco de dados: {e}")
 
-@router.get("/precificacao/listar", response_model=List[dict])
+@router.get("/precificacao/listar", response_model=models.PrecificacaoListResponse)
 async def listar_precificacoes(
     marketplace: Optional[str]=None, 
     id_loja: Optional[str]=None, 
@@ -52,13 +53,28 @@ async def listar_precificacoes(
     titulo: Optional[str]=None,
     plano: Optional[str]=None,
     categoria: Optional[str]=None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
     user: dict = Depends(dependencies.get_current_user)
 ):
     filters = {
         "marketplace": marketplace, "id_loja": id_loja, "sku": sku,
         "titulo": titulo, "plano": plano, "categoria": categoria
     }
-    return services.get_filtered_precificacoes(filters)
+    return services.get_filtered_precificacoes(filters, page, page_size)
+
+# NOVO: ENDPOINT PARA EDIÇÃO EM MASSA
+@router.post("/precificacao/bulk-update", status_code=200)
+async def bulk_update_precificacoes(payload: models.BulkUpdatePayload, user: dict = Depends(dependencies.get_current_user)):
+    user_email = user.get('email')
+    try:
+        affected_rows = services.bulk_update_prices(payload, user_email)
+        return {"message": f"{affected_rows} precificações foram atualizadas com sucesso!"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Ocorreu um erro inesperado durante a atualização em massa: {e}")
 
 @router.get("/precificacao/item/{id}", response_model=dict)
 async def get_precificacao_item(id: str, user: dict = Depends(dependencies.get_current_user)):
@@ -111,7 +127,7 @@ async def atualizar_precificacao(id: str, data: models.PrecificacaoCore, user: d
                    
         return {"message": "Precificação atualizada!", "id": id}
     except Exception as e:
-        services.traceback.print_exc()
+        traceback.print_exc()
         services.log_action(user_email, "UPDATE_PRICING_FAILED", {"id": id, "error": str(e)})
         raise HTTPException(status_code=500, detail=f"Erro ao atualizar no banco de dados: {e}")
 
@@ -120,6 +136,10 @@ async def excluir_precificacao(id: str, user: dict = Depends(dependencies.get_cu
     user_email = user.get('email')
     services.delete_precificacao_and_campaigns(id)
     services.log_action(user_email, "DELETE_PRICING", {"id": id})
+
+@router.get("/precificacao/historico/{sku}", response_model=List[dict])
+async def get_historico_sku(sku: str, user: dict = Depends(dependencies.get_current_user)):
+    return services.get_price_history_for_sku(sku)
 
 # --- Rotas de Dados Auxiliares ---
 
@@ -176,7 +196,7 @@ async def salvar_precificacao_campanha(data: models.PrecificacaoCampanhaPayload,
         services.log_action(user_email, action, {"id": row_data["id"]})
         return {"message": "Preço de campanha salvo com sucesso!", "id": row_data["id"]}
     except Exception as e:
-        services.traceback.print_exc()
+        traceback.print_exc()
         services.log_action(user_email, "SAVE_CAMPAIGN_PRICE_FAILED", {"error": str(e)})
         raise HTTPException(status_code=500, detail=f"Erro ao salvar preço de campanha: {e}")
 
@@ -208,7 +228,7 @@ async def get_data_for_edit_page(id: str, user: dict = Depends(dependencies.get_
             campanhas_ativas=[c.model_dump() for c in campanhas_ativas]
         )
     except Exception as e:
-        services.traceback.print_exc()
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Erro ao carregar dados para edição: {str(e)}")
 
 @router.get("/precificacao-campanha/item/{id}")

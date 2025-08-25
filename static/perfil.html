@@ -151,17 +151,11 @@
                                     body: JSON.stringify(payload)
                                 });
                                 if (!response.ok) throw new Error((await response.json()).detail || 'Erro ao salvar.');
-                                showAppModal({
-                                    title: "Sucesso",
-                                    bodyHtml: "<p>Perfil atualizado com sucesso!</p>",
-                                    buttons: [{ text: "OK", class: "primary" }]
-                                });
+                                // SUBSTITUIÇÃO: showAppModal por showToast
+                                showToast('Perfil atualizado com sucesso!');
                             } catch (error) {
-                                showAppModal({
-                                    title: "Erro",
-                                    bodyHtml: `<p>${error.message}</p>`,
-                                    buttons: [{ text: "OK", class: "primary" }]
-                                });
+                                // SUBSTITUIÇÃO: showAppModal por showToast
+                                showToast(error.message, 'error');
                             } finally {
                                 elements.saveProfileBtn.classList.remove('is-loading');
                                 elements.saveProfileBtn.disabled = false;
@@ -185,12 +179,10 @@
                                 const data = await response.json();
                                 elements.profileMainPic.src = data.new_photo_url;
                                 document.getElementById('profile-pic').src = data.new_photo_url;
-                                elements.uploadStatus.innerHTML = 'Foto alterada!';
-                                elements.uploadStatus.style.color = 'var(--primary-color)';
-                                setTimeout(() => elements.uploadStatus.innerHTML = '', 3000);
+                                showToast('Foto alterada com sucesso!');
+                                elements.uploadStatus.innerHTML = '';
                             } catch (error) {
-                                elements.uploadStatus.innerHTML = `Erro: ${error.message}`;
-                                elements.uploadStatus.style.color = 'var(--danger-color)';
+                                showToast(error.message, 'error');
                             } finally {
                                 elements.uploadBtnLabel.disabled = false;
                                 elements.photoUploadInput.disabled = false;

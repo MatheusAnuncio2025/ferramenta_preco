@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Cenários</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .simulation-grid {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 25px;
+            align-items: flex-start;
+        }
+        .results-table {
+            width: 100%;
+            margin-top: 20px;
+            border-collapse: collapse;
+        }
+        .results-table th, .results-table td {
+            border: 1px solid var(--border-color);
+            padding: 12px;
+            text-align: right;
+        }
+        .results-table th {
+            background-color: #f8f9fa;
+            text-align: left;
+        }
+        .results-table td.label {
+            font-weight: 500;
+            text-align: left;
+        }
+        .delta {
+            font-weight: bold;
+            padding-left: 10px;
+            font-size: 0.9rem;
+        }
+        .delta.positive {
+            color: var(--primary-hover-color);
+        }
+        .delta.negative {
+            color: var(--danger-color);
+        }
+
+        @media (max-width: 992px) {
+            .simulation-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="top-green-bar"></div>
+    <nav class="main-nav">
+        <a href="/alertas" id="alertas-link" class="nav-item hidden">Dashboard de Alertas</a>
+        <a href="/calculadora" class="nav-item">Calcular Preço</a>
+        <a href="/lista" class="nav-item">Consultar Precificações</a>
+        <a href="/configuracoes" class="nav-item">Configurações</a>
+        <a href="/regras" id="regras-link" class="nav-item hidden">Gerenciar Regras</a>
+        <a href="/campanhas" id="campanhas-link" class="nav-item hidden">Gerenciar Campanhas</a>
+        <a href="/historico" id="historico-link" class="nav-item hidden">Histórico</a>
+        <a href="/perfil" class="nav-item">Meu Perfil</a>
+        <a href="/admin" id="admin-link" class="nav-item hidden">Admin</a>
+        <a href="/simulador" id="simulador-link" class="nav-item active">Simulador</a>
+    </nav>
+    <div class="container">
+        <div class="header">
+            <h1>Simulador de Cenários</h1>
+            <div id="auth-container" class="auth-container hidden">
+                <img id="profile-pic" src="" alt="Foto do Perfil" class="profile-pic">
+                <span id="user-info" class="user-greeting"></span>
+                <button id="logout-btn" class="app-button auth-button logout">Logout</button>
+            </div>
+        </div>
+
+        <div class="simulation-grid">
+            <aside id="simulation-setup" class="form-section">
+                <h2>1. Selecione os Produtos</h2>
+                <div class="form-field">
+                    <label for="sim-loja">Loja / Marketplace</label>
+                    <select id="sim-loja"></select>
+                </div>
+                <div class="form-field">
+                    <label for="sim-categoria">Categoria de Precificação</label>
+                    <select id="sim-categoria"></select>
+                </div>
+                
+                <h2 style="margin-top: 30px;">2. Defina a Ação</h2>
+                <div class="form-field">
+                    <label for="sim-action-field">Se o campo...</label>
+                    <select id="sim-action-field">
+                        <option value="custo_unitario">Custo Unitário</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label for="sim-action-operation">sofrer a alteração de...</label>
+                    <select id="sim-action-operation">
+                        <option value="percent_increase">Aumento Percentual (%)</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label for="sim-action-value">com o valor de...</label>
+                    <input type="number" id="sim-action-value" step="0.01" placeholder="Ex: 10">
+                </div>
+
+                <div class="button-container">
+                    <button id="run-simulation-btn" class="app-button save-button">Executar Simulação</button>
+                </div>
+            </aside>
+            
+            <main id="simulation-results-container" class="form-section" style="min-height: 400px;">
+                <h2>Resultado da Simulação</h2>
+                <div id="results-content">
+                    <p style="text-align: center; color: #777; margin-top: 50px;">Configure e execute uma simulação para ver o impacto aqui.</p>
+                </div>
+            </main>
+        </div>
+        
+    </div>
+
+    <div id="app-modal" class="modal-overlay"></div>
+
+    <script src="/static/app.js"></script>
+    <script src="/static/utils.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            checkAuthStatusAndUpdateNav().then(user => {
+                if (user) {
+                    try {
+                        const simLoja = document.getElementById('sim-loja');
+                        const simCategoria = document.getElementById('sim-categoria');
+                        const runBtn = document.getElementById('run-simulation-btn');
+                        const resultsContent = document.getElementById('results-content');
+                        
+                        const populateFilters = async () => {
+                            try {
+                                const [lojasRes, catsRes] = await Promise.all([
+                                    fetch('/api/config/lojas'),
+                                    fetch('/api/categorias-precificacao')
+                                ]);
+                                
+                                const lojas = await lojasRes.json();
+                                simLoja.innerHTML = '<option value="">Todas as Lojas</option>';
+                                lojas.forEach(loja => {
+                                    const optionValue = `${loja.marketplace}|${loja.id_loja}`;
+                                    const optionText = `${loja.marketplace} - ${loja.id_loja}`;
+                                    simLoja.add(new Option(optionText, optionValue));
+                                });
+
+                                const categorias = await catsRes.json();
+                                simCategoria.innerHTML = '<option value="">Todas as Categorias</option>';
+                                categorias.forEach(cat => {
+                                    simCategoria.add(new Option(cat.nome, cat.nome));
+                                });
+
+                            } catch (error) {
+                                console.error("Falha ao popular filtros", error);
+                                showToast("Erro ao carregar filtros.", "error");
+                            }
+                        };
+
+                        const renderResults = (data) => {
+                            const { antes, depois } = data;
+
+                            const formatRow = (label, antesVal, depoisVal, isCurrency = true, isPercent = false) => {
+                                const antesFormatted = isPercent ? formatPercent(antesVal) : formatCurrency(antesVal);
+                                const depoisFormatted = isPercent ? formatPercent(depoisVal) : formatCurrency(depoisVal);
+                                const delta = depoisVal - antesVal;
+                                const deltaFormatted = isPercent ? `${delta.toFixed(2)}%`.replace('.', ',') : formatCurrency(delta);
+                                const deltaClass = delta > 0 ? 'positive' : (delta < 0 ? 'negative' : '');
+                                const deltaSign = delta >= 0 ? '+' : '';
+
+                                return `
+                                    <tr>
+                                        <td class="label">${label}</td>
+                                        <td>${antesFormatted}</td>
+                                        <td>${depoisFormatted}</td>
+                                        <td><span class="delta ${deltaClass}">${deltaSign}${deltaFormatted}</span></td>
+                                    </tr>
+                                `;
+                            };
+                            
+                            resultsContent.innerHTML = `
+                                <p>A simulação impactou <strong>${antes.total_items}</strong> produto(s).</p>
+                                <table class="results-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Métrica</th>
+                                            <th>Cenário Atual (Antes)</th>
+                                            <th>Cenário Simulado (Depois)</th>
+                                            <th>Variação</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${formatRow('Receita Total', antes.receita_total, depois.receita_total)}
+                                        ${formatRow('Custo Total', antes.custo_total, depois.custo_total)}
+                                        ${formatRow('Lucro Total', antes.lucro_total, depois.lucro_total)}
+                                        ${formatRow('Margem Média', antes.margem_media, depois.margem_media, false, true)}
+                                    </tbody>
+                                </table>
+                            `;
+                        };
+
+                        runBtn.addEventListener('click', async () => {
+                            runBtn.classList.add('is-loading');
+                            runBtn.disabled = true;
+                            resultsContent.innerHTML = '<p style="text-align: center; margin-top: 50px;">Executando simulação... <span class="loader-spinner"></span></p>';
+
+                            const lojaValue = simLoja.value;
+                            let marketplace = null, id_loja = null;
+                            if (lojaValue) {
+                                [marketplace, id_loja] = lojaValue.split('|');
+                            }
+
+                            const payload = {
+                                filters: {
+                                    marketplace: marketplace,
+                                    id_loja: id_loja,
+                                    categoria: simCategoria.value || null
+                                },
+                                action: {
+                                    field: document.getElementById('sim-action-field').value,
+                                    operation: document.getElementById('sim-action-operation').value,
+                                    value: parseFloat(document.getElementById('sim-action-value').value) || 0
+                                }
+                            };
+
+                            try {
+                                const response = await fetch('/api/simulador/run', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(payload)
+                                });
+                                const result = await response.json();
+                                if (!response.ok) throw new Error(result.detail || 'Erro no servidor.');
+                                
+                                renderResults(result);
+
+                            } catch (error) {
+                                resultsContent.innerHTML = `<p class="text-danger" style="text-align:center;">${error.message}</p>`;
+                            } finally {
+                                runBtn.classList.remove('is-loading');
+                                runBtn.disabled = false;
+                            }
+                        });
+
+                        setupLogoutButton();
+                        populateFilters();
+                        const simuladorLink = document.getElementById('simulador-link');
+                        if(simuladorLink) simuladorLink.classList.remove('hidden');
+
+                    } catch (error) {
+                        console.error("Erro ao inicializar a página do simulador:", error);
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>

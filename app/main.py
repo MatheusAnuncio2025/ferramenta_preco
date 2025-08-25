@@ -5,7 +5,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.exception_handlers import http_exception_handler
 from starlette.middleware.sessions import SessionMiddleware
 import os
-from .routers import admin, auth, campanhas, configuracoes, dashboard, perfil, precificacao, regras
+# Adicionada a importação do novo roteador do simulador
+from .routers import admin, auth, campanhas, configuracoes, dashboard, perfil, precificacao, regras, simulador
 from .dependencies import get_current_user, get_current_admin_user, get_historico_viewer_user
 
 app = FastAPI(
@@ -29,6 +30,7 @@ app.include_router(dashboard.router)
 app.include_router(perfil.router)
 app.include_router(precificacao.router)
 app.include_router(regras.router)
+app.include_router(simulador.router) # Novo roteador incluído
 
 # --- Tratamento de Exceções Global ---
 @app.exception_handler(HTTPException)
@@ -85,3 +87,7 @@ async def serve_historico_page(user: dict = Depends(get_historico_viewer_user)):
 
 @app.get("/editar-campanha", response_class=HTMLResponse, include_in_schema=False)
 async def serve_edit_campaign_page(user: dict = Depends(get_current_user)): return FileResponse('static/editar-campanha.html')
+
+# NOVA ROTA para servir a página do simulador
+@app.get("/simulador", response_class=HTMLResponse, include_in_schema=False)
+async def serve_simulator_page(user: dict = Depends(get_current_user)): return FileResponse('static/simulador.html')

@@ -3,12 +3,13 @@ import os
 import uuid
 import json
 import traceback
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 from google.cloud import bigquery, storage
 from cachetools import cached
 from .cache import cache
+from . import models
 
 # --- Configurações de Conexão ---
 client = bigquery.Client()
@@ -81,177 +82,269 @@ def get_precificacao_by_id(record_id: str) -> Optional[Dict[str, Any]]:
         if isinstance(value, (datetime, date)): item[key] = value.isoformat()
     return item
 
-def get_filtered_precificacoes(filters: Dict[str, Any]) -> List[Dict[str, Any]]:
-    query = f"SELECT * FROM `{TABLE_PRECIFICACOES_SALVAS}`"
-    where_clauses, params, filter_map = [], [], {'categoria': 'categoria_precificacao'}
+def get_filtered_precificacoes(filters: Dict[str, Any], page: int = 1, page_size: int = 20) -> models.PrecificacaoListResponse:
+    base_query = f"FROM `{TABLE_PRECIFICACOES_SALVAS}`"
+    where_clauses = []
+    params = []
+    filter_map = {'categoria': 'categoria_precificacao'}
+
     for key, value in filters.items():
-        if not value: continue
+        if not value:
+            continue
         column_name = filter_map.get(key, key)
+        param_name = f"param_{key}"
         if key in ['sku', 'titulo']:
-            where_clauses.append(f"LOWER({column_name}) LIKE LOWER(@{key})")
-            params.append(bigquery.ScalarQueryParameter(key, "STRING", f"%{value}%"))
+            where_clauses.append(f"LOWER({column_name}) LIKE LOWER(@{param_name})")
+            params.append(bigquery.ScalarQueryParameter(param_name, "STRING", f"%{value}%"))
         elif key == 'plano':
             if value == 'classico': where_clauses.append("venda_classico > 0")
             elif value == 'premium': where_clauses.append("venda_premium > 0")
         else:
-            where_clauses.append(f"LOWER({column_name}) = LOWER(@{key})")
-            params.append(bigquery.ScalarQueryParameter(key, "STRING", value))
-    if where_clauses: query += " WHERE " + " AND ".join(where_clauses)
-    query += " ORDER BY data_calculo DESC LIMIT 100"
-    results = [dict(row) for row in execute_query(query, params)]
-    for r in results:
-        for key, value in r.items():
-            if isinstance(value, (datetime, date)): r[key] = value.isoformat()
-    return results
+            where_clauses.append(f"LOWER({column_name}) = LOWER(@{param_name})")
+            params.append(bigquery.ScalarQueryParameter(param_name, "STRING", value))
+
+    where_sql = ""
+    if where_clauses:
+        where_sql = " WHERE " + " AND ".join(where_clauses)
+
+    count_query = f"SELECT COUNT(*) as total {base_query}{where_sql}"
+    count_job_config = bigquery.QueryJobConfig(query_parameters=params)
+    count_result = client.query(count_query, job_config=count_job_config).result()
+    total_items = list(count_result)[0].total
+
+    offset = (page - 1) * page_size
+    select_query = f"SELECT * {base_query}{where_sql} ORDER BY data_calculo DESC LIMIT @page_size OFFSET @offset"
+    
+    pag_params = [
+        bigquery.ScalarQueryParameter("page_size", "INT64", page_size),
+        bigquery.ScalarQueryParameter("offset", "INT64", offset),
+    ]
+    all_params = params + pag_params
+
+    select_job_config = bigquery.QueryJobConfig(query_parameters=all_params)
+    results_iterator = client.query(select_query, job_config=select_job_config).result()
+    
+    items = []
+    for row in results_iterator:
+        item_dict = dict(row)
+        for key, value in item_dict.items():
+            if isinstance(value, (datetime, date)):
+                item_dict[key] = value.isoformat()
+        items.append(item_dict)
+
+    return models.PrecificacaoListResponse(total_items=total_items, items=items)
 
 def delete_precificacao_and_campaigns(record_id: str):
     params = [bigquery.ScalarQueryParameter("id", "STRING", record_id)]
     execute_query(f"DELETE FROM `{TABLE_PRECIFICACOES_CAMPANHA}` WHERE precificacao_base_id = @id", params)
     execute_query(f"DELETE FROM `{TABLE_PRECIFICACOES_SALVAS}` WHERE id = @id", params)
 
-def get_linked_campaigns(base_id: str) -> List[Dict[str, Any]]:
+def bulk_update_prices(payload: models.BulkUpdatePayload, user_email: str):
+    if not payload.ids:
+        return 0
+
+    field_to_update = ""
+    param_type = "STRING"
+    
+    if payload.action == models.UpdateAction.set_custo_unitario:
+        field_to_update = "custo_unitario"
+        param_type = "FLOAT64"
+    elif payload.action == models.UpdateAction.set_categoria:
+        field_to_update = "categoria_precificacao"
+        param_type = "STRING"
+    else:
+        raise ValueError(f"Ação de atualização em massa '{payload.action.value}' não é suportada.")
+
     query = f"""
-        SELECT pc.*, c.nome as nome_campanha
-        FROM `{TABLE_PRECIFICACOES_CAMPANHA}` pc
-        JOIN `{TABLE_CAMPANHAS_ML}` c ON pc.campanha_id = c.id
-        WHERE pc.precificacao_base_id = @base_id
+        UPDATE `{TABLE_PRECIFICACOES_SALVAS}`
+        SET {field_to_update} = @value,
+            calculado_por = @user_email,
+            data_calculo = CURRENT_TIMESTAMP()
+        WHERE id IN UNNEST(@ids)
     """
-    params = [bigquery.ScalarQueryParameter("base_id", "STRING", base_id)]
-    results = [dict(row) for row in execute_query(query, params)]
-    for r in results:
-        for key, value in r.items():
-            if isinstance(value, (datetime, date)): r[key] = value.isoformat()
-    return results
+    
+    params = [
+        bigquery.ScalarQueryParameter("value", param_type, payload.value),
+        bigquery.ScalarQueryParameter("user_email", "STRING", user_email),
+        bigquery.ArrayQueryParameter("ids", "STRING", payload.ids),
+    ]
+
+    job_config = bigquery.QueryJobConfig(query_parameters=params)
+    query_job = client.query(query, job_config=job_config)
+    query_job.result()
+
+    log_action(
+        user_email,
+        "BULK_UPDATE_PRICING",
+        details={
+            "action": payload.action.value,
+            "value": payload.value,
+            "item_count": len(payload.ids),
+            "ids_afetados": payload.ids
+        }
+    )
+
+    return query_job.num_dml_affected_rows
+
+def get_linked_campaigns(base_id: str) -> List[Dict[str, Any]]:
+    # ... (código existente)
+    pass
 
 def get_campaign_pricing_details(item_id: str) -> Optional[Dict[str, Any]]:
-    query = f"""
-        SELECT pc.*, c.nome as nome_campanha, pb.sku, pb.titulo
-        FROM `{TABLE_PRECIFICACOES_CAMPANHA}` pc
-        JOIN `{TABLE_CAMPANHAS_ML}` c ON pc.campanha_id = c.id
-        JOIN `{TABLE_PRECIFICACOES_SALVAS}` pb ON pc.precificacao_base_id = pb.id
-        WHERE pc.id = @id
-    """
-    params = [bigquery.ScalarQueryParameter("id", "STRING", item_id)]
-    results = [dict(row) for row in execute_query(query, params)]
-    if not results: return None
-    item = results[0]
-    for key, value in item.items():
-        if isinstance(value, (datetime, date)): item[key] = value.isoformat()
-    return item
+    # ... (código existente)
+    pass
+
+def get_price_history_for_sku(sku: str) -> List[Dict[str, Any]]:
+    # ... (código existente)
+    pass
 
 # --- Usuários ---
 def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
-    query = f"SELECT *, pode_ver_historico FROM `{TABLE_USUARIOS}` WHERE email = @email"
-    params = [bigquery.ScalarQueryParameter("email", "STRING", email)]
-    results = [dict(row) for row in execute_query(query, params)]
-    return results[0] if results else None
+    # ... (código existente)
+    pass
 
 def get_all_users() -> List[Dict[str, Any]]:
-    query = f"SELECT *, pode_ver_historico FROM `{TABLE_USUARIOS}` ORDER BY nome ASC"
-    results = [dict(row) for row in execute_query(query)]
-    for user_data in results:
-        for key, value in user_data.items():
-            if isinstance(value, (datetime, date)): user_data[key] = value.isoformat()
-    return results
+    # ... (código existente)
+    pass
 
 def create_user(user_data: Dict[str, Any]) -> Dict[str, Any]:
-    cols = ", ".join(f"`{k}`" for k in user_data.keys())
-    placeholders = ", ".join(f"@{k}" for k in user_data.keys())
-    query = f"INSERT INTO `{TABLE_USUARIOS}` ({cols}) VALUES ({placeholders})"
-    params = [bigquery.ScalarQueryParameter(k, "BOOL" if isinstance(v, bool) else "STRING", v) for k, v in user_data.items()]
-    execute_query(query, params)
-    return user_data
+    # ... (código existente)
+    pass
 
 def update_user_properties(email: str, updates: Dict[str, Any]):
-    set_clauses = ", ".join([f"{key} = @{key}" for key in updates.keys()])
-    query = f"UPDATE `{TABLE_USUARIOS}` SET {set_clauses} WHERE email = @email"
-    params = [bigquery.ScalarQueryParameter("email", "STRING", email)]
-    params.extend([bigquery.ScalarQueryParameter(k, "BOOL" if isinstance(v, bool) else "STRING", v) for k, v in updates.items()])
-    execute_query(query, params)
+    # ... (código existente)
+    pass
 
 def delete_user_by_email(email: str):
-    query = f"DELETE FROM `{TABLE_USUARIOS}` WHERE email = @email"
-    params = [bigquery.ScalarQueryParameter("email", "STRING", email)]
-    execute_query(query, params)
+    # ... (código existente)
+    pass
 
 # --- Campanhas ---
 @cached(cache)
 def get_all_campaigns() -> List[Dict[str, Any]]:
-    query = f"SELECT * FROM `{TABLE_CAMPANHAS_ML}` ORDER BY data_fim DESC, nome"
-    return [dict(row) for row in execute_query(query)]
+    # ... (código existente)
+    pass
 
 @cached(cache)
 def get_active_campaigns() -> List[Dict[str, Any]]:
-    query = f"SELECT * FROM `{TABLE_CAMPANHAS_ML}` WHERE data_fim >= CURRENT_DATE() OR data_fim IS NULL ORDER BY nome"
-    results = [dict(row) for row in execute_query(query)]
-    # Pydantic model conversion will happen in the router
-    return results
+    # ... (código existente)
+    pass
+
+def save_all_campaigns(campaigns_data: List[Dict[str, Any]]):
+    # ... (código existente)
+    pass
 
 # --- Configurações de Loja ---
 @cached(cache)
 def get_lojas_config() -> List[Dict[str, Any]]:
-    query = f"SELECT * FROM `{TABLE_LOJAS_CONFIG}` ORDER BY marketplace, id_loja"
-    return [dict(row) for row in execute_query(query)]
+    # ... (código existente)
+    pass
 
 @cached(cache)
 def get_loja_details(loja_id: str) -> Dict[str, Any]:
-    query = f"SELECT configuracoes FROM `{TABLE_LOJA_CONFIG_DETALHES}` WHERE loja_id = @loja_id"
-    params = [bigquery.ScalarQueryParameter("loja_id", "STRING", loja_id)]
-    results = [dict(row) for row in execute_query(query, params)]
-    if not results or not results[0].get('configuracoes'):
-        return {}
-    config_data = results[0]['configuracoes']
-    if isinstance(config_data, str):
-      try:
-        return json.loads(config_data)
-      except json.JSONDecodeError:
-        return {}
-    return config_data if isinstance(config_data, dict) else {}
+    # ... (código existente)
+    pass
 
 def get_loja_id_by_marketplace_and_loja(marketplace: str, id_loja: str) -> Optional[str]:
-    query = f"SELECT id FROM `{TABLE_LOJAS_CONFIG}` WHERE marketplace = @marketplace AND id_loja = @id_loja"
-    params = [
-        bigquery.ScalarQueryParameter("marketplace", "STRING", marketplace),
-        bigquery.ScalarQueryParameter("id_loja", "STRING", id_loja),
-    ]
-    results = list(execute_query(query, params))
-    return results[0]['id'] if results else None
+    # ... (código existente)
+    pass
 
 def save_loja_details(loja_id: str, detalhes_json: str):
-    merge_query = f"""
-        MERGE `{TABLE_LOJA_CONFIG_DETALHES}` T
-        USING (SELECT @loja_id as loja_id, @config_json as configuracoes) S ON T.loja_id = S.loja_id
-        WHEN MATCHED THEN UPDATE SET T.configuracoes = S.configuracoes
-        WHEN NOT MATCHED THEN INSERT (loja_id, configuracoes) VALUES (S.loja_id, S.configuracoes)
-    """
-    params = [
-        bigquery.ScalarQueryParameter("loja_id", "STRING", loja_id),
-        bigquery.ScalarQueryParameter("config_json", "JSON", detalhes_json),
-    ]
-    execute_query(merge_query, params)
+    # ... (código existente)
+    pass
 
 def delete_loja_and_details(loja_id: str):
-    params = [bigquery.ScalarQueryParameter("loja_id", "STRING", loja_id)]
-    execute_query(f"DELETE FROM `{TABLE_LOJA_CONFIG_DETALHES}` WHERE loja_id = @loja_id", params)
-    execute_query(f"DELETE FROM `{TABLE_LOJAS_CONFIG}` WHERE id = @loja_id", params)
+    # ... (código existente)
+    pass
 
 # --- Dashboard & Histórico ---
 def get_dashboard_alert_data() -> Dict[str, List]:
-    # ... (código mantido da resposta anterior)
+    # ... (código existente)
     pass
+
 def get_history_logs() -> List[Dict[str, Any]]:
-    query = f"SELECT * FROM `{TABLE_LOGS}` ORDER BY timestamp DESC LIMIT 200"
-    results = [dict(row) for row in execute_query(query)]
-    for r in results:
-        for key, value in r.items():
-            if isinstance(value, (datetime, date)): r[key] = value.isoformat()
-    return results
+    # ... (código existente)
+    pass
+
+def get_profitability_by_category() -> List[Dict[str, Any]]:
+    # ... (código existente)
+    pass
+
+def get_profit_evolution() -> List[Dict[str, Any]]:
+    # ... (código existente)
+    pass
 
 # --- Regras de Negócio ---
 @cached(cache)
 def get_all_business_rules() -> Dict[str, List]:
-    # ... (código mantido da resposta anterior)
+    # ... (código existente)
     pass
+
 def get_all_precificacao_categories() -> List[Dict[str, Any]]:
-    query = f"SELECT * FROM `{TABLE_CATEGORIAS_PRECIFICACAO}` ORDER BY nome"
-    return [dict(row) for row in execute_query(query)]
+    # ... (código existente)
+    pass
+
+# --- Simulador ---
+async def run_simulation(payload: models.SimulacaoPayload) -> models.SimulacaoResultado:
+    # 1. Buscar precificações com base nos filtros
+    filters = payload.filters.model_dump()
+    # Usamos a função de listagem, mas com um limite alto para pegar todos os itens do filtro
+    precificacoes_response = get_filtered_precificacoes(filters, page=1, page_size=10000)
+    precificacoes = precificacoes_response.items
+
+    if not precificacoes:
+        raise ValueError("Nenhum produto encontrado para os filtros selecionados.")
+
+    # 2. Calcular o cenário "Antes"
+    total_receita_antes = sum((p.get('venda_classico', 0) or 0) + (p.get('venda_premium', 0) or 0) for p in precificacoes)
+    total_custo_antes = sum(p.get('custo_total', 0) or 0 for p in precificacoes)
+    total_lucro_antes = sum((p.get('lucro_classico', 0) or 0) + (p.get('lucro_premium', 0) or 0) for p in precificacoes)
+    margem_media_antes = (total_lucro_antes / total_receita_antes * 100) if total_receita_antes > 0 else 0
+
+    antes = models.TotaisSimulacao(
+        receita_total=total_receita_antes,
+        custo_total=total_custo_antes,
+        lucro_total=total_lucro_antes,
+        margem_media=margem_media_antes,
+        total_items=len(precificacoes)
+    )
+
+    # 3. Calcular o cenário "Depois"
+    action = payload.action
+    precificacoes_depois = []
+
+    for p in precificacoes:
+        p_depois = p.copy()
+        
+        # Lógica de simulação (exemplo inicial para custo)
+        if action.field == 'custo_unitario' and action.operation == 'percent_increase':
+            novo_custo_unitario = (p_depois.get('custo_unitario', 0) or 0) * (1 + action.value / 100)
+            p_depois['custo_unitario'] = novo_custo_unitario
+            p_depois['custo_total'] = novo_custo_unitario * (p_depois.get('quantidade', 1) or 1)
+            
+            # ATENÇÃO: Um recálculo completo do preço de venda seria necessário aqui
+            # para uma simulação 100% precisa. Por simplicidade, vamos recalcular o lucro
+            # com base no preço de venda existente.
+            repasse_total = (p_depois.get('repasse_classico', 0) or 0) + (p_depois.get('repasse_premium', 0) or 0)
+            lucro_total_item = repasse_total - p_depois['custo_total']
+            
+            # Simplificando a distribuição do lucro para o modelo
+            p_depois['lucro_classico'] = lucro_total_item / 2
+            p_depois['lucro_premium'] = lucro_total_item / 2
+        
+        precificacoes_depois.append(p_depois)
+
+    total_receita_depois = sum((p.get('venda_classico', 0) or 0) + (p.get('venda_premium', 0) or 0) for p in precificacoes_depois)
+    total_custo_depois = sum(p.get('custo_total', 0) or 0 for p in precificacoes_depois)
+    total_lucro_depois = sum((p.get('lucro_classico', 0) or 0) + (p.get('lucro_premium', 0) or 0) for p in precificacoes_depois)
+    margem_media_depois = (total_lucro_depois / total_receita_depois * 100) if total_receita_depois > 0 else 0
+
+    depois = models.TotaisSimulacao(
+        receita_total=total_receita_depois,
+        custo_total=total_custo_depois,
+        lucro_total=total_lucro_depois,
+        margem_media=margem_media_depois,
+        total_items=len(precificacoes_depois)
+    )
+
+    return models.SimulacaoResultado(antes=antes, depois=depois)

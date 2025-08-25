@@ -111,6 +111,7 @@
                         const regrasFixasPanel = document.getElementById('regras-fixas-panel');
                         let currentLojaId = null;
                         let allStores = [];
+                        
                         const loadLojas = async () => {
                             try {
                                 const response = await fetch('/api/config/lojas');
@@ -121,6 +122,7 @@
                                 lojasList.innerHTML = `<p style="padding: 15px; color: var(--danger-color);">${error.message}</p>`;
                             }
                         };
+
                         const renderLojasList = () => {
                             lojasList.innerHTML = '';
                             if (allStores.length === 0) {
@@ -132,14 +134,18 @@
                                 item.className = 'sidebar-item';
                                 item.dataset.id = loja.id;
                                 item.innerHTML = `<strong>${loja.marketplace}</strong><span>ID: ${loja.id_loja}</span>`;
+                                if (loja.id === currentLojaId) {
+                                    item.classList.add('active');
+                                }
                                 item.onclick = () => handleLojaSelect(loja.id, `${loja.marketplace} - ${loja.id_loja}`);
                                 lojasList.appendChild(item);
                             });
                         };
+
                         const loadAndRenderFixedRules = async () => {
                             const listContainer = document.getElementById('regras-fixas-list');
                             try {
-                                const response = await fetch('/api/regras-fixas/mercado-livre');
+                                const response = await fetch('/api/regras-negocio/tarifa-fixa');
                                 if (!response.ok) throw new Error('Não foi possível carregar as regras.');
                                 const regras = await response.json();
                                 let html = '<ul style="list-style-type: none; padding-left: 0;">';
@@ -152,6 +158,7 @@
                                 listContainer.innerHTML = `<span class="text-danger">${error.message}</span>`;
                             }
                         };
+
                         const handleLojaSelect = (lojaId, lojaName) => {
                             currentLojaId = lojaId;
                             document.querySelectorAll('.sidebar-item').forEach(item => item.classList.remove('active'));
@@ -163,6 +170,7 @@
                             regrasFixasPanel.classList.toggle('hidden', !isMercadoLivre);
                             loadLojaDetails(lojaId);
                         };
+
                         const loadLojaDetails = async (lojaId) => {
                             try {
                                 const response = await fetch(`/api/config/lojas/${lojaId}/detalhes`);
@@ -175,6 +183,7 @@
                                 showAppModal({ title: 'Erro', bodyHtml: `<p>${error.message}</p>`, buttons: [{ text: 'OK', class: 'secondary' }] });
                             }
                         };
+
                         const renderCommissionRules = (rules) => {
                             commissionRulesList.innerHTML = '';
                             if (!rules || rules.length === 0) {
@@ -198,6 +207,7 @@
                                 });
                             }
                         };
+
                         saveStoreBtn.addEventListener('click', async () => {
                             if (!currentLojaId) return;
                             saveStoreBtn.classList.add('is-loading');
@@ -219,14 +229,16 @@
                                     body: JSON.stringify(payload)
                                 });
                                 if (!response.ok) throw new Error((await response.json()).detail || 'Erro ao salvar.');
-                                showAppModal({ title: 'Sucesso!', bodyHtml: '<p>Configurações da loja salvas com sucesso!</p>', buttons: [{ text: 'OK', class: 'primary' }] });
+                                // SUBSTITUIÇÃO: showAppModal por showToast
+                                showToast('Configurações salvas com sucesso!');
                             } catch (error) {
-                                showAppModal({ title: 'Erro', bodyHtml: `<p>${error.message}</p>`, buttons: [{ text: 'OK', class: 'secondary' }] });
+                                showToast(error.message, 'error');
                             } finally {
                                 saveStoreBtn.classList.remove('is-loading');
                                 saveStoreBtn.disabled = false;
                             }
                         });
+                        
                         const openCommissionRuleModal = (rule = null) => {
                             const isEditing = rule !== null;
                             const title = isEditing ? 'Editar Regra de Comissão' : 'Adicionar Nova Regra';
@@ -281,7 +293,9 @@
                             ];
                             showAppModal({ title, bodyHtml, buttons });
                         };
+
                         addRuleBox.onclick = () => openCommissionRuleModal();
+                        
                         commissionRulesList.addEventListener('click', e => {
                             const target = e.target;
                             const ruleItem = target.closest('.commission-rule-item');
@@ -303,6 +317,7 @@
                                 });
                             }
                         });
+
                         addLojaBtn.onclick = () => {
                             showAppModal({
                                 title: 'Adicionar Nova Loja',
@@ -338,17 +353,22 @@
                                                     body: JSON.stringify(payload)
                                                 });
                                                 if (!response.ok) throw new Error((await response.json()).detail || 'Erro ao adicionar loja.');
-                                                await loadLojas();
-                                                return true;
+                                                // ATUALIZAÇÃO AJAX: Recarrega a lista de lojas sem F5
+                                                await loadLojas(); 
+                                                showToast('Loja adicionada com sucesso!');
+                                                return true; // Fecha o modal
                                             } catch (error) {
-                                                showAppModal({ title: "Erro", bodyHtml: `<p>${error.message}</p>`, buttons: [{ text: 'OK', class: 'primary' }] });
-                                                return false;
+                                                showToast(error.message, 'error');
+                                                button.classList.remove('is-loading');
+                                                button.disabled = false;
+                                                return false; // Mantém o modal aberto para correção
                                             }
                                         }
                                     }
                                 ]
                             });
                         };
+
                         deleteStoreBtn.onclick = () => {
                             if (!currentLojaId) return;
                             const lojaName = allStores.find(s => s.id === currentLojaId)?.id_loja || 'esta loja';
@@ -372,10 +392,12 @@
                                                 currentLojaId = null;
                                                 storeDetailsPanel.classList.add('hidden');
                                                 welcomePanel.classList.remove('hidden');
-                                                loadLojas();
+                                                // ATUALIZAÇÃO AJAX
+                                                await loadLojas();
+                                                showToast('Loja excluída com sucesso!');
                                                 return true;
                                             } catch (error) {
-                                                showAppModal({ title: "Erro ao Excluir", bodyHtml: `<p>${error.message}</p>`, buttons: [{ text: 'OK', class: 'primary' }] });
+                                                showToast(error.message, 'error');
                                                 return false;
                                             }
                                         }
@@ -384,7 +406,6 @@
                             });
                         };
                         
-                        // Inicialização
                         setupLogoutButton();
                         loadLojas();
                         loadAndRenderFixedRules();

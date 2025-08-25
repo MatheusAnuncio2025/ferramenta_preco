@@ -1,7 +1,8 @@
 # app/models.py
 from pydantic import BaseModel, Field, EmailStr
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Union
 from datetime import date, datetime
+from enum import Enum
 
 class PrecificacaoCore(BaseModel):
     marketplace: str
@@ -37,6 +38,21 @@ class PrecificacaoPayload(PrecificacaoCore):
     id: str
     data_calculo: Optional[Any] = None
     calculado_por: Optional[str] = None
+
+class PrecificacaoListResponse(BaseModel):
+    total_items: int
+    items: List[dict]
+
+class UpdateAction(str, Enum):
+    set_custo_unitario = "set_custo_unitario"
+    set_categoria = "set_categoria"
+    ajustar_margem_classico = "ajustar_margem_classico"
+    ajustar_margem_premium = "ajustar_margem_premium"
+
+class BulkUpdatePayload(BaseModel):
+    ids: List[str]
+    action: UpdateAction
+    value: Union[str, float]
 
 class PrecificacaoCampanhaPayload(BaseModel):
     id: Optional[str] = None
@@ -164,3 +180,36 @@ class DashboardData(BaseModel):
     campanhas_expirando: List[CampanhaML]
     custos_desatualizados: List[AlertaCusto]
     produtos_estagnados: List[AlertaProdutoEstagnado]
+
+class ChartDataItem(BaseModel):
+    label: str
+    value: float
+
+class ChartData(BaseModel):
+    data: List[ChartDataItem]
+
+# NOVOS MODELOS PARA O SIMULADOR
+class SimulacaoFilter(BaseModel):
+    marketplace: Optional[str] = None
+    id_loja: Optional[str] = None
+    categoria: Optional[str] = None
+
+class SimulacaoAction(BaseModel):
+    field: str # Ex: 'custo_unitario', 'frete_classico'
+    operation: str # Ex: 'percent_increase', 'fixed_value'
+    value: float
+
+class SimulacaoPayload(BaseModel):
+    filters: SimulacaoFilter
+    action: SimulacaoAction
+
+class TotaisSimulacao(BaseModel):
+    receita_total: float
+    custo_total: float
+    lucro_total: float
+    margem_media: float
+    total_items: int
+
+class SimulacaoResultado(BaseModel):
+    antes: TotaisSimulacao
+    depois: TotaisSimulacao

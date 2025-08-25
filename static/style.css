@@ -140,6 +140,7 @@ body {
 .form-field, .form-group {
     display: flex;
     flex-direction: column;
+    position: relative;
 }
 .form-field label, .form-group label {
     margin-bottom: 6px;
@@ -148,7 +149,6 @@ body {
     font-weight: 500;
 }
 
-/* ALTERAÇÃO: Regra de estilo unificada para que inputs e selects em ambas as páginas tenham a mesma aparência */
 .form-field input, .form-field select, .form-group input, .form-group select {
     width: 100%;
     padding: 10px 12px;
@@ -156,15 +156,14 @@ body {
     border-radius: 5px;
     font-size: 1rem;
     background-color: var(--white-color);
-    -webkit-appearance: none; /* Remove a aparência padrão do sistema */
-    appearance: none; /* Remove a aparência padrão do sistema */
-    background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2220%22%20height%3D%2220%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M5%208l5%205%205-5z%22%20fill%3D%22%23555%22%2F%3E%3C%2Fsvg%3E'); /* Adiciona uma seta personalizada */
+    -webkit-appearance: none; 
+    appearance: none;
+    background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2220%22%20height%3D%2220%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M5%208l5%205%205-5z%22%20fill%3D%22%23555%22%2F%3E%3C%2Fsvg%3E');
     background-repeat: no-repeat;
     background-position: right 10px center;
     background-size: 16px;
     transition: border-color var(--transition-speed), box-shadow var(--transition-speed), background-color var(--transition-speed);
 }
-/* Apenas inputs de texto não precisam da seta */
 .form-field input, .form-group input {
     background-image: none;
 }
@@ -188,6 +187,27 @@ body {
     color: #777;
     min-height: 1.2em;
 }
+
+.error-message {
+    color: var(--danger-color);
+    font-size: 0.8rem;
+    margin-top: 4px;
+    min-height: 1.2em; 
+    display: none;
+}
+.form-field input.is-invalid, .form-field select.is-invalid {
+    border-color: var(--danger-color);
+}
+.form-field input.is-invalid:focus, .form-field select.is-invalid:focus {
+    box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.2);
+}
+.form-field input.is-valid, .form-field select.is-valid {
+    border-color: var(--primary-color);
+}
+.is-invalid + .error-message, .is-invalid ~ .error-message {
+    display: block;
+}
+
 
 .checkbox-field {
     display: flex;
@@ -240,6 +260,7 @@ body {
 .app-button:disabled {
     background-color: #95a5a6;
     cursor: not-allowed;
+    opacity: 0.7;
 }
 
 .save-button { background-color: var(--primary-color); }
@@ -336,9 +357,17 @@ body {
 
 .product-listing-item { 
     position: relative; 
+    padding-left: 60px;
     max-width: 1200px;
     margin-left: auto;
     margin-right: auto;
+}
+.product-checkbox {
+    position: absolute;
+    left: 25px;
+    top: 50%;
+    transform: translateY(-50%) scale(1.5);
+    cursor: pointer;
 }
 
 .product-header {
@@ -355,7 +384,6 @@ body {
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     gap: 15px 20px;
 }
-
 
 .action-menu-button {
     position: absolute; top: 20px; right: 20px;
@@ -391,6 +419,34 @@ body {
 .action-menu-item.delete {
     color: var(--danger-color);
 }
+
+/* --- ESTILOS PARA AÇÕES EM MASSA --- */
+.bulk-actions-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    background-color: #eef7ff;
+    border: 1px solid #bde0ff;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
+}
+.bulk-actions-header.hidden {
+    display: none;
+}
+.selection-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    font-weight: 500;
+}
+.selection-info #selection-count {
+    color: var(--secondary-color);
+}
+
 
 /* --- ESTILOS PARA PÁGINA DE CONFIGURAÇÃO --- */
 .config-grid-container {
@@ -529,6 +585,46 @@ body {
 .modal-button.primary { border: none; background-color: var(--primary-color); color: white; }
 .modal-button.secondary { border: none; background-color: #e9e9e9; color: #555; }
 .modal-button.delete { border: none; background-color: var(--danger-color); color: white; }
+
+/* ESTILOS PARA NOTIFICAÇÕES TOAST */
+#toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.toast {
+    background-color: var(--white-color);
+    color: var(--text-color);
+    padding: 15px 20px;
+    border-radius: 6px;
+    box-shadow: var(--strong-shadow);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    animation: slideInRight 0.4s ease-out, fadeOut 0.4s ease-in 4.6s forwards;
+    border-left: 5px solid;
+}
+.toast.success {
+    border-left-color: var(--primary-color);
+}
+.toast.error {
+    border-left-color: var(--danger-color);
+}
+.toast-message {
+    font-weight: 500;
+}
+@keyframes slideInRight {
+    from { transform: translateX(120%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+@keyframes fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
 
 /* --- Perfil e Admin --- */
 .profile-grid { display: grid; grid-template-columns: 200px 1fr; gap: 30px; align-items: flex-start; }

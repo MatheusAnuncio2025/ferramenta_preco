@@ -1,4 +1,36 @@
 /**
+ * Garante que o container de toasts exista no DOM.
+ */
+function ensureToastContainer() {
+    if (!document.getElementById('toast-container')) {
+        const container = document.createElement('div');
+        container.id = 'toast-container';
+        document.body.appendChild(container);
+    }
+}
+
+/**
+ * Exibe uma notificação toast.
+ * @param {string} message - A mensagem a ser exibida.
+ * @param {('success'|'error')} type - O tipo de toast.
+ */
+function showToast(message, type = 'success') {
+    ensureToastContainer();
+    const container = document.getElementById('toast-container');
+    
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `<span class="toast-message">${message}</span>`;
+    
+    container.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.remove();
+    }, 5000); // Remove o toast após 5 segundos
+}
+
+
+/**
  * Exibe um modal genérico na tela.
  * @param {object} config - Objeto de configuração do modal.
  * @param {string} config.title - O título do modal.
@@ -65,14 +97,12 @@ async function checkAuthStatusAndUpdateNav() {
         const data = await response.json();
         
         const authContainer = document.getElementById('auth-container');
-        const loginBtn = document.getElementById('login-btn');
         const adminLink = document.getElementById('admin-link');
         const regrasLink = document.getElementById('regras-link');
         const campanhasLink = document.getElementById('campanhas-link');
         const historicoLink = document.getElementById('historico-link');
         const profilePic = document.getElementById('profile-pic');
         const userInfo = document.getElementById('user-info');
-        // O link de alertas é visível para todos os usuários logados
         const alertasLink = document.getElementById('alertas-link');
 
 
@@ -85,19 +115,15 @@ async function checkAuthStatusAndUpdateNav() {
             if (profilePic) profilePic.src = data.picture || `https://placehold.co/40x40/2ecc71/ffffff?text=${data.name ? data.name[0] : 'U'}`;
             if (userInfo) userInfo.textContent = `Olá, ${data.name.split(' ')[0]}!`;
             if (authContainer) authContainer.classList.remove('hidden');
-            if (loginBtn) loginBtn.classList.add('hidden');
             
-            // Links visíveis para todos os usuários logados
             if (alertasLink) alertasLink.classList.remove('hidden');
             if (regrasLink) regrasLink.classList.remove('hidden');
             
-            // Links de Admin
             if (data.role === 'admin') {
                 if (adminLink) adminLink.classList.remove('hidden');
                 if (campanhasLink) campanhasLink.classList.remove('hidden');
             }
             
-            // Link de Histórico (permissão específica)
             if (data.pode_ver_historico) {
                 if (historicoLink) historicoLink.classList.remove('hidden');
             }
@@ -105,7 +131,6 @@ async function checkAuthStatusAndUpdateNav() {
             return data;
         } else {
             if (authContainer) authContainer.classList.add('hidden');
-            if (loginBtn) loginBtn.classList.remove('hidden');
 
             const protectedPaths = ['/calculadora', '/lista', '/configuracoes', '/perfil', '/admin', '/regras', '/editar', '/pendente', '/historico', '/campanhas', '/alertas'];
             if (protectedPaths.some(path => window.location.pathname.startsWith(path))) {
@@ -115,10 +140,9 @@ async function checkAuthStatusAndUpdateNav() {
         }
     } catch (error) {
         console.error('Falha ao verificar status de autenticação:', error);
-        const authContainer = document.getElementById('auth-container');
-        const loginBtn = document.getElementById('login-btn');
-        if (authContainer) authContainer.classList.add('hidden');
-        if (loginBtn) loginBtn.classList.remove('hidden');
+        if (document.getElementById('auth-container')) {
+            document.getElementById('auth-container').classList.add('hidden');
+        }
         return null;
     }
 }

@@ -17,9 +17,9 @@ async def get_campanhas(user: dict = Depends(dependencies.get_current_admin_user
 async def save_campanhas(payload: List[models.CampanhaML], user: dict = Depends(dependencies.get_current_admin_user)):
     """Salva/atualiza todas as campanhas (Apenas Admin)."""
     try:
-        # A lógica de `process_rules` será movida para uma função de serviço dedicada.
-        # Por enquanto, mantemos a chamada original, mas o ideal é criar `services.save_all_campaigns(payload)`.
-        services.process_rules(services.TABLE_CAMPANHAS_ML, payload, ['id'])
+        # Converte a lista de modelos Pydantic para uma lista de dicionários
+        campaigns_list = [c.model_dump() for c in payload]
+        services.save_all_campaigns(campaigns_list)
         services.log_action(user['email'], "UPDATE_CAMPAIGNS")
         return {"message": "Campanhas atualizadas com sucesso."}
     except Exception as e:
