@@ -1,0 +1,32 @@
+# Arquivos que nunca devem ser enviados para o Google Cloud
+
+.gcloudignore
+.gitignore
+.dockerignore
+
+# Arquivos de ambiente e segredos
+.env
+*.env.local
+gcp-sa-key.json
+
+# Ambientes virtuais e dependências locais
+venv/
+env/
+.venv/
+node_modules/
+
+# Arquivos de cache do Python
+__pycache__/
+*.pyc
+
+# Logs
+logs/
+*.log
+
+# Editor directories
+.vscode/
+.idea/
+
+# Outros
+.DS_Store
+README.md

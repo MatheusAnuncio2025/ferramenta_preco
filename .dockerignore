@@ -1,0 +1,31 @@
+# Arquivos de configuração e segredos que não devem entrar na imagem Docker
+.env
+gcp-sa-key.json
+*.env.local
+
+# Arquivos do Git e Docker
+.git/
+.gitignore
+.dockerignore
+Dockerfile
+docker-compose.yml
+
+# Ambientes virtuais do Python
+venv/
+.venv/
+env/
+
+# Arquivos de cache do Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Logs e arquivos de dependência de frontend
+logs/
+*.log
+node_modules/
+
+# Arquivos de editores de código
+.vscode/
+.idea/

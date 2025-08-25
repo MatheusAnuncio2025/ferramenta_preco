@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Alertas</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 25px;
+        }
+        .alert-card {
+            background-color: var(--white-color);
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: var(--box-shadow);
+            border-top: 4px solid var(--primary-color);
+        }
+        .alert-card.warning { border-color: #f39c12; }
+        .alert-card.danger { border-color: var(--danger-color); }
+        .alert-card h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            font-size: 1.2rem;
+        }
+        .alert-list { list-style: none; padding: 0; }
+        .alert-item {
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .alert-item:last-child { border-bottom: none; }
+        .alert-item .sku { font-weight: 500; }
+        .alert-item .details { font-size: 0.9rem; color: #555; }
+        .alert-item .action a {
+            text-decoration: none;
+            color: var(--primary-color);
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+        .empty-state { color: #777; text-align: center; padding: 20px; }
+    </style>
+</head>
+<body>
+    <div class="top-green-bar"></div>
+    <nav class="main-nav">
+        <a href="/alertas" id="alertas-link" class="nav-item hidden">Dashboard de Alertas</a>
+        <a href="/calculadora" class="nav-item">Calcular Preço</a>
+        <a href="/lista" class="nav-item">Consultar Precificações</a>
+        <a href="/configuracoes" class="nav-item">Configurações</a>
+        <a href="/regras" id="regras-link" class="nav-item hidden">Gerenciar Regras</a>
+        <a href="/campanhas" id="campanhas-link" class="nav-item hidden">Gerenciar Campanhas</a>
+        <a href="/historico" id="historico-link" class="nav-item hidden">Histórico</a>
+        <a href="/perfil" class="nav-item">Meu Perfil</a>
+        <a href="/admin" id="admin-link" class="nav-item hidden">Admin</a>
+    </nav>
+    <div class="container">
+        <div class="header">
+            <h1>Dashboard de Alertas</h1>
+            <div id="auth-container" class="auth-container hidden">
+                <img id="profile-pic" src="" alt="Foto do Perfil" class="profile-pic">
+                <span id="user-info" class="user-greeting"></span>
+                <button id="logout-btn" class="app-button auth-button logout">Logout</button>
+            </div>
+        </div>
+
+        <div id="loader" class="form-section" style="text-align: center;">
+            <p>Buscando informações... <span class="loader-spinner"></span></p>
+        </div>
+
+        <div id="dashboard-content" class="dashboard-grid hidden">
+            <div id="campanhas-card" class="alert-card"></div>
+            <div id="custos-card" class="alert-card warning"></div>
+            <div id="estagnados-card" class="alert-card danger"></div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        checkAuthStatusAndUpdateNav().then(user => {
+            if (user) {
+                try {
+                    const loader = document.getElementById('loader');
+                    const content = document.getElementById('dashboard-content');
+                    const campanhasCard = document.getElementById('campanhas-card');
+                    const custosCard = document.getElementById('custos-card');
+                    const estagnadosCard = document.getElementById('estagnados-card');
+
+                    const formatDate = (dateString) => {
+                        if (!dateString) return 'N/A';
+                        return new Date(dateString + 'T00:00:00').toLocaleDateString('pt-BR');
+                    }
+
+                    const renderDashboard = (data) => {
+                        let campanhasHtml = '<h3>Campanhas Expirando (7 dias)</h3><ul class="alert-list">';
+                        if (data.campanhas_expirando.length > 0) {
+                            data.campanhas_expirando.forEach(c => {
+                                campanhasHtml += `<li class="alert-item">
+                                    <div>
+                                        <div class="sku">${c.nome}</div>
+                                        <div class="details">Termina em: ${formatDate(c.data_fim)}</div>
+                                    </div>
+                                    <div class="action"><a href="/campanhas">Gerenciar</a></div>
+                                </li>`;
+                            });
+                        } else {
+                            campanhasHtml += '<div class="empty-state">Nenhuma campanha expirando em breve.</div>';
+                        }
+                        campanhasCard.innerHTML = campanhasHtml + '</ul>';
+
+                        let custosHtml = '<h3>Custos Desatualizados</h3><ul class="alert-list">';
+                        if (data.custos_desatualizados.length > 0) {
+                            data.custos_desatualizados.forEach(p => {
+                                custosHtml += `<li class="alert-item">
+                                    <div>
+                                        <div class="sku">${p.sku}</div>
+                                        <div class="details">Precificado: R$ ${p.custo_precificado.toFixed(2)} | Atual: R$ ${p.custo_atual.toFixed(2)}</div>
+                                    </div>
+                                    <div class="action"><a href="/editar?id=${p.id_precificacao}">Revisar</a></div>
+                                </li>`;
+                            });
+                        } else {
+                            custosHtml += '<div class="empty-state">Todos os custos estão atualizados.</div>';
+                        }
+                        custosCard.innerHTML = custosHtml + '</ul>';
+
+                        let estagnadosHtml = '<h3>Produtos Estagnados (+90 dias)</h3><ul class="alert-list">';
+                        if (data.produtos_estagnados.length > 0) {
+                            data.produtos_estagnados.forEach(p => {
+                                estagnadosHtml += `<li class="alert-item">
+                                    <div>
+                                        <div class="sku">${p.sku}</div>
+                                        <div class="details">${p.titulo || ''}</div>
+                                        <div class="details"><b>${p.dias_sem_vender} dias sem vender</b></div>
+                                    </div>
+                                    <div class="action"><a href="/lista?sku=${p.sku}">Ver</a></div>
+                                </li>`;
+                            });
+                        } else {
+                            estagnadosHtml += '<div class="empty-state">Nenhum produto estagnado encontrado.</div>';
+                        }
+                        estagnadosCard.innerHTML = estagnadosHtml + '</ul>';
+                    };
+
+                    const loadDashboard = async () => {
+                        try {
+                            const response = await fetch('/api/dashboard/alertas');
+                            if (!response.ok) throw new Error('Não foi possível carregar os dados do dashboard.');
+                            const data = await response.json();
+                            renderDashboard(data);
+                            loader.classList.add('hidden');
+                            content.classList.remove('hidden');
+                        } catch (error) {
+                            loader.innerHTML = `<p class="text-danger">${error.message}</p>`;
+                        }
+                    };
+
+                    setupLogoutButton();
+                    loadDashboard();
+
+                } catch (error) {
+                    console.error("Erro ao inicializar a página de alertas:", error);
+                    const container = document.querySelector('.container');
+                    if (container) {
+                        container.innerHTML = '<h1>Ocorreu um erro ao carregar a página.</h1><p>Por favor, tente recarregar ou contate o suporte. Detalhes do erro foram registrados no console.</p>';
+                    }
+                }
+            }
+        });
+    });
+    </script>
+</body>
+</html>

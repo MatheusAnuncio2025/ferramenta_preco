@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Gerenciar Regras</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .rules-section {
+            margin-bottom: 30px;
+        }
+
+        .rules-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .rules-header h3 {
+            margin-right: auto;
+        }
+
+        .rules-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .rules-table th,
+        .rules-table td {
+            border: 1px solid var(--border-color);
+            padding: 10px 12px;
+            text-align: left;
+            vertical-align: middle;
+        }
+
+        .rules-table th {
+            background-color: #f8f9fa;
+            white-space: nowrap;
+        }
+
+        .rules-table input {
+            width: 100%;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            font-size: 0.95rem;
+        }
+
+        .rules-table input:disabled {
+            background-color: #f7f9fa;
+            cursor: not-allowed;
+        }
+
+        .actions-cell {
+            text-align: center;
+            width: 120px;
+        }
+
+        .delete-row-btn {
+            background-color: var(--danger-color);
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .delete-row-btn:hover {
+            background-color: var(--danger-hover-color);
+        }
+
+        .delete-row-btn:disabled {
+            background-color: #ccc;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="top-green-bar"></div>
+    <nav class="main-nav">
+        <a href="/alertas" id="alertas-link" class="nav-item hidden">Dashboard de Alertas</a>
+        <a href="/calculadora" class="nav-item">Calcular Preço</a>
+        <a href="/lista" class="nav-item">Consultar Precificações</a>
+        <a href="/configuracoes" class="nav-item">Configurações</a>
+        <a href="/regras" id="regras-link" class="nav-item hidden">Gerenciar Regras</a>
+        <a href="/campanhas" id="campanhas-link" class="nav-item hidden">Gerenciar Campanhas</a>
+        <a href="/historico" id="historico-link" class="nav-item hidden">Histórico</a>
+        <a href="/perfil" class="nav-item">Meu Perfil</a>
+        <a href="/admin" id="admin-link" class="nav-item hidden">Admin</a>
+    </nav>
+    <div class="container">
+        <div class="header">
+            <h1>Gerenciamento de Regras de Negócio</h1>
+            <div id="auth-container" class="auth-container hidden">
+                <img id="profile-pic" src="" alt="Foto do Perfil" class="profile-pic">
+                <span id="user-info" class="user-greeting"></span>
+                <button id="logout-btn" class="app-button auth-button logout">Logout</button>
+            </div>
+        </div>
+
+        <div id="loader" class="form-section" style="text-align: center;">
+            <p>Carregando regras... <span class="loader-spinner"></span></p>
+        </div>
+
+        <div id="rules-content" class="hidden">
+            <div class="form-section rules-section">
+                <div class="rules-header">
+                    <h3>Regras de Tarifa Fixa (Mercado Livre)</h3>
+                    <button id="save-tarifa-fixa-btn" class="app-button save-button"
+                        style="padding: 8px 15px;">Salvar</button>
+                    <button id="add-tarifa-fixa-btn" class="app-button"
+                        style="padding: 8px 15px; background-color: var(--secondary-color);">+ Adicionar</button>
+                </div>
+                <div style="overflow-x: auto;">
+                    <table class="rules-table" id="tarifa-fixa-table">
+                        <thead>
+                            <tr>
+                                <th>Descrição</th>
+                                <th>Venda Mín. (R$)</th>
+                                <th>Venda Máx. (R$)</th>
+                                <th>Taxa Fixa (R$)</th>
+                                <th>Taxa (%)</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="form-section rules-section">
+                <div class="rules-header">
+                    <h3>Categorias de Precificação</h3>
+                    <button id="save-categorias-btn" class="app-button save-button"
+                        style="padding: 8px 15px;">Salvar</button>
+                    <button id="add-categoria-btn" class="app-button"
+                        style="padding: 8px 15px; background-color: var(--secondary-color);">+ Adicionar</button>
+                </div>
+                <div style="overflow-x: auto;">
+                    <table class="rules-table" id="categorias-table">
+                        <thead>
+                            <tr>
+                                <th>Nome da Categoria</th>
+                                <th>Margem Padrão (%)</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="form-section rules-section">
+                <div class="rules-header">
+                    <h3>Regras de Frete (Mercado Livre)</h3>
+                    <button id="save-frete-btn" class="app-button save-button"
+                        style="padding: 8px 15px;">Salvar</button>
+                    <button id="add-frete-btn" class="app-button"
+                        style="padding: 8px 15px; background-color: var(--secondary-color);">+ Adicionar</button>
+                </div>
+                <div style="overflow-x: auto;">
+                    <table class="rules-table" id="frete-table">
+                        <thead>
+                            <tr>
+                                <th>Venda Mín. (R$)</th>
+                                <th>Venda Máx. (R$)</th>
+                                <th>Peso Mín. (g)</th>
+                                <th>Peso Máx. (g)</th>
+                                <th>Custo Frete (R$)</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="app-modal" class="modal-overlay"></div>
+
+    <template id="tarifa-fixa-row-template">
+        <tr>
+            <td><input type="text" class="rule-input" data-field="descricao" placeholder="Ex: Produtos < R$ 79"></td>
+            <td><input type="number" step="0.01" class="rule-input" data-field="min_venda" placeholder="0.00"></td>
+            <td><input type="number" step="0.01" class="rule-input" data-field="max_venda" placeholder="78.99"></td>
+            <td><input type="number" step="0.01" class="rule-input" data-field="taxa_fixa" placeholder="6.75"></td>
+            <td><input type="number" step="0.01" class="rule-input" data-field="taxa_percentual" placeholder="0"></td>
+            <td class="actions-cell"><button class="delete-row-btn">Excluir</button></td>
+        </tr>
+    </template>
+
+    <template id="categoria-row-template">
+        <tr>
+            <td><input type="text" class="rule-input" data-field="nome" placeholder="Ex: Eletrônicos"></td>
+            <td><input type="number" step="0.01" class="rule-input" data-field="margem_padrao" placeholder="Ex: 15.0">
+            </td>
+            <td class="actions-cell"><button class="delete-row-btn">Excluir</button></td>
+        </tr>
+    </template>
+
+    <template id="frete-row-template">
+        <tr>
+            <td><input type="number" step="0.01" class="rule-input" data-field="min_venda" placeholder="79.00"></td>
+            <td><input type="number" step="0.01" class="rule-input" data-field="max_venda" placeholder="99.99"></td>
+            <td><input type="number" class="rule-input" data-field="min_peso_g" placeholder="0"></td>
+            <td><input type="number" class="rule-input" data-field="max_peso_g" placeholder="300"></td>
+            <td><input type="number" step="0.01" class="rule-input" data-field="custo_frete" placeholder="11.97"></td>
+            <td class="actions-cell"><button class="delete-row-btn">Excluir</button></td>
+        </tr>
+    </template>
+
+    <script src="/static/app.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            checkAuthStatusAndUpdateNav().then(user => {
+                if (user) {
+                    try {
+                        const loader = document.getElementById('loader');
+                        const content = document.getElementById('rules-content');
+                        const tabelas = {
+                            tarifaFixa: document.getElementById('tarifa-fixa-table').querySelector('tbody'),
+                            categorias: document.getElementById('categorias-table').querySelector('tbody'),
+                            frete: document.getElementById('frete-table').querySelector('tbody'),
+                        };
+                        const templates = {
+                            tarifaFixa: document.getElementById('tarifa-fixa-row-template'),
+                            categorias: document.getElementById('categoria-row-template'),
+                            frete: document.getElementById('frete-row-template'),
+                        };
+                        const botoesAdicionar = {
+                            tarifaFixa: document.getElementById('add-tarifa-fixa-btn'),
+                            categorias: document.getElementById('add-categoria-btn'),
+                            frete: document.getElementById('add-frete-btn'),
+                        };
+                        const botoesSalvar = {
+                            tarifaFixa: document.getElementById('save-tarifa-fixa-btn'),
+                            categorias: document.getElementById('save-categorias-btn'),
+                            frete: document.getElementById('save-frete-btn'),
+                        };
+
+                        const renderTable = (key, data) => {
+                            const tbody = tabelas[key];
+                            const template = templates[key];
+                            tbody.innerHTML = '';
+                            data.forEach(rowData => {
+                                const clone = template.content.cloneNode(true);
+                                clone.querySelector('tr').dataset.id = rowData.id;
+                                const inputs = clone.querySelectorAll('.rule-input');
+                                inputs.forEach(input => {
+                                    const field = input.dataset.field;
+                                    input.value = rowData[field] === null || rowData[field] === undefined ? '' : rowData[field];
+                                });
+                                clone.querySelector('.delete-row-btn').onclick = (e) => e.target.closest('tr').remove();
+                                tbody.appendChild(clone);
+                            });
+                        };
+
+                        const loadRules = async () => {
+                            try {
+                                const response = await fetch('/api/regras-negocio');
+                                if (!response.ok) throw new Error('Falha ao carregar regras.');
+                                const data = await response.json();
+                                renderTable('tarifaFixa', data.REGRAS_TARIFA_FIXA_ML);
+                                renderTable('categorias', data.CATEGORIAS_PRECIFICACAO);
+                                renderTable('frete', data.REGRAS_FRETE_ML);
+                                loader.classList.add('hidden');
+                                content.classList.remove('hidden');
+                            } catch (error) {
+                                loader.innerHTML = `<p class="text-danger">${error.message}</p>`;
+                            }
+                        };
+
+                        const collectDataFromTable = (key) => {
+                            return Array.from(tabelas[key].querySelectorAll('tr')).map(row => {
+                                const rowData = { id: row.dataset.id || null };
+                                row.querySelectorAll('.rule-input').forEach(input => {
+                                    const field = input.dataset.field;
+                                    const valueStr = input.value.trim();
+                                    rowData[field] = input.type === 'number' ?
+                                        (valueStr === '' ? null : parseFloat(valueStr)) :
+                                        valueStr;
+                                });
+                                return rowData;
+                            });
+                        };
+
+                        const handleSave = async (key, buttonEl) => {
+                            const endpointMap = {
+                                tarifaFixa: '/api/regras-negocio/tarifa-fixa',
+                                categorias: '/api/regras-negocio/categorias',
+                                frete: '/api/regras-negocio/frete'
+                            };
+                            const payload = collectDataFromTable(key);
+                            buttonEl.classList.add('is-loading');
+                            buttonEl.disabled = true;
+                            try {
+                                const response = await fetch(endpointMap[key], {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(payload),
+                                });
+                                if (!response.ok) throw new Error((await response.json()).detail || 'Erro no servidor');
+                                showAppModal({ title: 'Sucesso!', bodyHtml: '<p>Regras salvas com sucesso!</p>', buttons: [{ text: 'OK', class: 'primary' }] });
+                            } catch (error) {
+                                showAppModal({ title: 'Erro ao Salvar', bodyHtml: `<p>${error.message}</p>`, buttons: [{ text: 'OK', class: 'primary' }] });
+                            } finally {
+                                buttonEl.classList.remove('is-loading');
+                                buttonEl.disabled = false;
+                            }
+                        };
+
+                        Object.keys(botoesSalvar).forEach(key => {
+                            botoesSalvar[key].addEventListener('click', () => handleSave(key, botoesSalvar[key]));
+                        });
+
+                        Object.keys(botoesAdicionar).forEach(key => {
+                            botoesAdicionar[key].addEventListener('click', () => {
+                                const clone = templates[key].content.cloneNode(true);
+                                clone.querySelector('.delete-row-btn').onclick = (e) => e.target.closest('tr').remove();
+                                tabelas[key].appendChild(clone);
+                            });
+                        });
+                        
+                        setupLogoutButton();
+                        loadRules().then(() => {
+                            if (user.role !== 'admin') {
+                                Object.values(botoesSalvar).forEach(btn => btn.style.display = 'none');
+                                Object.values(botoesAdicionar).forEach(btn => btn.style.display = 'none');
+                                document.querySelectorAll('.rule-input').forEach(input => input.disabled = true);
+                                document.querySelectorAll('.delete-row-btn').forEach(btn => btn.style.display = 'none');
+                            }
+                        });
+
+                    } catch (error) {
+                        console.error("Erro ao inicializar a página de regras:", error);
+                        const container = document.querySelector('.container');
+                        if (container) {
+                            container.innerHTML = '<h1>Ocorreu um erro ao carregar a página.</h1><p>Por favor, tente recarregar ou contate o suporte. Detalhes do erro foram registrados no console.</p>';
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>

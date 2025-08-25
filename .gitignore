@@ -1,0 +1,45 @@
+# Arquivos de ambiente e segredos
+.env
+*.env.local
+gcp-sa-key.json
+
+# Ambientes virtuais do Python
+venv/
+env/
+.venv/
+
+# Arquivos de cache e compilados do Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+pip-cache/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependências de front-end
+node_modules/
+
+# Arquivos de build e distribuição
+dist/
+dist-ssr/
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

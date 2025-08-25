@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Histórico de Precificação</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .container {
+            max-width: 1800px;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+
+        .logs-table-container {
+            overflow-x: auto;
+            max-height: none;
+        }
+
+        .logs-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .logs-table th,
+        .logs-table td {
+            border: 1px solid var(--border-color);
+            padding: 12px 15px;
+            text-align: left;
+            vertical-align: top;
+            font-size: 0.95rem;
+            word-break: break-word;
+        }
+
+        .logs-table th {
+            background-color: #f8f9fa;
+            white-space: nowrap;
+        }
+
+        .logs-table tr:nth-child(even) {
+            background-color: var(--light-grey);
+        }
+
+        .log-details {
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 0.85rem;
+            color: #555;
+            background-color: #fcfcfc;
+            border-radius: 4px;
+            padding: 5px;
+            margin-top: 5px;
+        }
+
+        .log-changes-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            width: 100%;
+        }
+
+        .log-changes-list li {
+            background-color: #f7f9fa;
+            border-left: 3px solid var(--primary-color);
+            margin-bottom: 8px;
+            padding: 8px;
+            border-radius: 4px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .log-changes-list li strong {
+            display: inline;
+            margin-bottom: 0;
+            margin-right: 5px;
+            white-space: nowrap;
+        }
+
+        .log-changes-list li span.old-value {
+            color: var(--danger-color);
+            text-decoration: line-through;
+            margin-right: 5px;
+            white-space: nowrap;
+        }
+
+        .log-changes-list li span.new-value {
+            color: var(--primary-hover-color);
+            white-space: nowrap;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="top-green-bar"></div>
+    <nav class="main-nav">
+        <a href="/alertas" id="alertas-link" class="nav-item hidden">Dashboard de Alertas</a>
+        <a href="/calculadora" class="nav-item">Calcular Preço</a>
+        <a href="/lista" class="nav-item">Consultar Precificações</a>
+        <a href="/configuracoes" class="nav-item">Configurações</a>
+        <a href="/regras" id="regras-link" class="nav-item hidden">Gerenciar Regras</a>
+        <a href="/campanhas" id="campanhas-link" class="nav-item hidden">Gerenciar Campanhas</a>
+        <a href="/historico" id="historico-link" class="nav-item hidden">Histórico</a>
+        <a href="/perfil" class="nav-item">Meu Perfil</a>
+        <a href="/admin" id="admin-link" class="nav-item hidden">Admin</a>
+    </nav>
+    <div class="container">
+        <div class="header">
+            <h1>Histórico de Precificação</h1>
+            <div id="auth-container" class="auth-container hidden">
+                <img id="profile-pic" src="" alt="Foto do Perfil" class="profile-pic">
+                <span id="user-info" class="user-greeting"></span>
+                <button id="logout-btn" class="app-button auth-button logout">Logout</button>
+            </div>
+        </div>
+
+        <div id="logs-container" class="form-section">
+            <p style="text-align: center; padding: 20px;">Carregando logs... <span class="loader-spinner"></span></p>
+        </div>
+    </div>
+
+    <div id="app-modal" class="modal-overlay"></div>
+
+    <script src="/static/app.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            checkAuthStatusAndUpdateNav().then(user => {
+                if (user) {
+                    try {
+                        const logsContainer = document.getElementById('logs-container');
+                        const renderLogs = (logs) => {
+                            if (logs.length === 0) {
+                                logsContainer.innerHTML = '<p style="text-align: center; padding: 20px;">Nenhum registro de log encontrado.</p>';
+                                return;
+                            }
+                            let tableHtml = `
+                                <div class="logs-table-container">
+                                    <table class="logs-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Data e Hora</th>
+                                                <th>Usuário</th>
+                                                <th>Ação</th>
+                                                <th>Detalhes</th>
+                                                <th>Alterações de Precificação</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                            `;
+                            logs.forEach(log => {
+                                const timestamp = new Date(log.timestamp).toLocaleString('pt-BR');
+                                const userEmail = log.user_email || 'N/A';
+                                const action = log.action || 'N/A';
+                                let details = 'N/A';
+                                let changesHtml = 'N/A';
+                                if (log.details) {
+                                    try {
+                                        const detailsObj = JSON.parse(log.details);
+                                        details = Object.entries(detailsObj)
+                                            .map(([key, value]) => `${key}: ${JSON.stringify(value, null, 2)}`)
+                                            .join('\n');
+                                    } catch (e) { details = log.details; }
+                                }
+                                if (log.detalhes_alteracao) {
+                                    try {
+                                        const changesObj = JSON.parse(log.detalhes_alteracao);
+                                        changesHtml = '<ul class="log-changes-list">';
+                                        Object.entries(changesObj).forEach(([field, change]) => {
+                                            let oldValue = change.old_value;
+                                            let newValue = change.new_value;
+                                            if (typeof oldValue === 'number') oldValue = oldValue.toFixed(2);
+                                            if (typeof newValue === 'number') newValue = newValue.toFixed(2);
+                                            changesHtml += `
+                                                <li>
+                                                    <strong>${field}:</strong> 
+                                                    <span class="old-value">${oldValue === null ? 'vazio' : oldValue}</span> -> <span class="new-value">${newValue === null ? 'vazio' : newValue}</span>
+                                                </li>
+                                            `;
+                                        });
+                                        changesHtml += '</ul>';
+                                    } catch (e) { changesHtml = log.detalhes_alteracao; }
+                                }
+                                tableHtml += `
+                                    <tr>
+                                        <td>${timestamp}</td>
+                                        <td>${userEmail}</td>
+                                        <td>${action}</td>
+                                        <td><pre class="log-details">${details}</pre></td>
+                                        <td>${changesHtml}</td>
+                                    </tr>
+                                `;
+                            });
+                            tableHtml += `
+                                        </tbody>
+                                    </table>
+                                </div>
+                            `;
+                            logsContainer.innerHTML = tableHtml;
+                        };
+
+                        const fetchAndRenderLogs = async () => {
+                            logsContainer.innerHTML = '<p style="text-align: center; padding: 20px;">Carregando logs... <span class="loader-spinner"></span></p>';
+                            try {
+                                const response = await fetch('/api/historico');
+                                if (!response.ok) throw new Error('Falha ao carregar os logs.');
+                                const logs = await response.json();
+                                renderLogs(logs);
+                            } catch (error) {
+                                logsContainer.innerHTML = `<p style="color: var(--danger-color); text-align: center; padding: 20px;">Erro: ${error.message}</p>`;
+                            }
+                        };
+                        
+                        setupLogoutButton();
+                        fetchAndRenderLogs();
+
+                    } catch (error) {
+                        console.error("Erro ao inicializar a página de histórico:", error);
+                        const container = document.querySelector('.container');
+                        if (container) {
+                            container.innerHTML = '<h1>Ocorreu um erro ao carregar a página.</h1><p>Por favor, tente recarregar ou contate o suporte. Detalhes do erro foram registrados no console.</p>';
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>

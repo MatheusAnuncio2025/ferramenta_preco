@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Gerenciar Usuários</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+    <div class="top-green-bar"></div>
+    <nav class="main-nav">
+        <a href="/alertas" id="alertas-link" class="nav-item hidden">Dashboard de Alertas</a>
+        <a href="/calculadora" class="nav-item">Calcular Preço</a>
+        <a href="/lista" class="nav-item">Consultar Precificações</a>
+        <a href="/configuracoes" class="nav-item">Configurações</a>
+        <a href="/regras" id="regras-link" class="nav-item hidden">Gerenciar Regras</a>
+        <a href="/campanhas" id="campanhas-link" class="nav-item hidden">Gerenciar Campanhas</a>
+        <a href="/historico" id="historico-link" class="nav-item hidden">Histórico</a>
+        <a href="/perfil" class="nav-item">Meu Perfil</a>
+        <a href="/admin" id="admin-link" class="nav-item hidden">Admin</a>
+    </nav>
+    <div class="container">
+        <div class="header">
+            <h1>Painel Administrativo</h1>
+            <div id="auth-container" class="auth-container hidden">
+                <img id="profile-pic" src="" alt="Foto do Perfil" class="profile-pic">
+                <span id="user-info" class="user-greeting"></span>
+                <button id="logout-btn" class="app-button auth-button logout">Logout</button>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <h2>Gerenciamento de Usuários</h2>
+            <div id="user-list-container" style="overflow-x: auto;"></div>
+            <div class="button-container">
+                <button id="add-user-btn" class="app-button save-button">Adicionar Novo Usuário</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="app-modal" class="modal-overlay"></div>
+
+    <script src="/static/app.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            checkAuthStatusAndUpdateNav().then(user => {
+                if (user && user.role === 'admin') {
+                    try {
+                        const userListContainer = document.getElementById('user-list-container');
+                        const addUserBtn = document.getElementById('add-user-btn');
+                        let currentUserEmail = user.email;
+
+                        const createSafeId = (email) => `user-row-${email.replace(/[^a-zA-Z0-9]/g, '')}`;
+
+                        const renderUserList = (users) => {
+                            let tableHtml = '<table class="user-table"><thead><tr><th>Usuário</th><th>Email</th><th>Função</th><th>Autorizado</th><th>Ver Histórico</th><th>Ações</th></tr></thead><tbody>';
+                            if (users.length === 0) {
+                                tableHtml += '<tr><td colspan="6" style="text-align:center; padding: 20px;">Nenhum usuário encontrado.</td></tr>';
+                            } else {
+                                users.forEach(user => {
+                                    const isCurrentUser = user.email === currentUserEmail;
+                                    const rowId = createSafeId(user.email);
+                                    tableHtml += `
+                                    <tr id="${rowId}">
+                                        <td>
+                                            <div style="display: flex; align-items: center; gap: 10px;">
+                                                <img src="${user.foto_url || `https://placehold.co/40x40/cccccc/ffffff?text=${user.nome ? user.nome[0] : '?'}`}" alt="Foto">
+                                                <span>${user.nome || 'N/A'}</span>
+                                            </div>
+                                        </td>
+                                        <td>${user.email}</td>
+                                        <td>
+                                            <select class="form-field" onchange="handleRoleChange(this)" data-email="${user.email}" ${isCurrentUser ? 'disabled' : ''}>
+                                                <option value="usuario" ${user.funcao === 'usuario' ? 'selected' : ''}>Usuário</option>
+                                                <option value="admin" ${user.funcao === 'admin' ? 'selected' : ''}>Admin</option>
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <label class="toggle-switch">
+                                                <input type="checkbox" onchange="handleAuthorizationChange(this)" data-email="${user.email}" ${user.autorizado ? 'checked' : ''} ${isCurrentUser ? 'disabled' : ''}>
+                                                <span class="slider"></span>
+                                            </label>
+                                        </td>
+                                        <td>
+                                            <label class="toggle-switch">
+                                                <input type="checkbox" onchange="handleHistoryAccessChange(this)" data-email="${user.email}" ${user.pode_ver_historico ? 'checked' : ''} ${isCurrentUser ? 'disabled' : ''}>
+                                                <span class="slider"></span>
+                                            </label>
+                                        </td>
+                                        <td>
+                                            <button class="app-button delete-button" onclick="handleDeleteUser('${user.email}', '${user.nome}')" ${isCurrentUser ? 'disabled' : ''}>Excluir</button>
+                                        </td>
+                                    </tr>
+                                `;
+                                });
+                            }
+                            tableHtml += '</tbody></table>';
+                            userListContainer.innerHTML = tableHtml;
+                        };
+
+                        const loadUsers = async () => {
+                            userListContainer.innerHTML = '<p style="text-align: center; padding: 20px;">Carregando usuários... <span class="loader-spinner"></span></p>';
+                            try {
+                                const response = await fetch('/api/admin/usuarios');
+                                if (!response.ok) throw new Error('Falha ao carregar lista de usuários.');
+                                const users = await response.json();
+                                renderUserList(users);
+                            } catch (error) {
+                                userListContainer.innerHTML = `<p style="color: var(--danger-color);">${error.message}</p>`;
+                            }
+                        };
+
+                        window.handleDeleteUser = (email, nome) => {
+                            showAppModal({
+                                title: "Confirmar Exclusão",
+                                bodyHtml: `<p>Tem certeza que deseja excluir o usuário <strong>${nome}</strong> (${email})?</p><p style="color: var(--danger-color); margin-top: 10px;">Esta ação não pode ser desfeita.</p>`,
+                                buttons: [
+                                    { text: "Cancelar", class: "secondary" },
+                                    {
+                                        text: "Confirmar Exclusão",
+                                        class: "delete",
+                                        onClick: async (btn) => {
+                                            btn.classList.add('is-loading');
+                                            btn.disabled = true;
+                                            try {
+                                                const response = await fetch(`/api/admin/usuarios/${email}`, { method: 'DELETE' });
+                                                if (!response.ok) {
+                                                    const error = await response.json();
+                                                    throw new Error(error.detail || 'Erro ao excluir usuário.');
+                                                }
+                                                document.getElementById(createSafeId(email))?.remove();
+                                                showAppModal({ title: "Sucesso", bodyHtml: "<p>Usuário excluído com sucesso.</p>", buttons: [{ text: "OK", class: "primary" }] });
+                                            } catch (error) {
+                                                showAppModal({ title: "Erro", bodyHtml: `<p>Não foi possível excluir: ${error.message}</p>`, buttons: [{ text: "OK", class: "primary" }] });
+                                            }
+                                            return false;
+                                        }
+                                    }
+                                ]
+                            });
+                        };
+
+                        window.handleAuthorizationChange = async (checkbox) => {
+                            await sendUpdateRequest(checkbox.dataset.email, 'autorizar', checkbox.checked, checkbox);
+                        };
+
+                        window.handleRoleChange = async (select) => {
+                            await sendUpdateRequest(select.dataset.email, 'funcao', select.value, select);
+                        };
+                        
+                        window.handleHistoryAccessChange = async (checkbox) => {
+                            await sendUpdateRequest(checkbox.dataset.email, 'pode_ver_historico', checkbox.checked, checkbox);
+                        };
+
+                        const sendUpdateRequest = async (email, action, value, element) => {
+                            element.disabled = true;
+                            try {
+                                const response = await fetch(`/api/admin/usuarios/${email}/acao?acao=${action}&valor=${value}`, { method: 'POST' });
+                                if (!response.ok) {
+                                    const error = await response.json();
+                                    throw new Error(error.detail || 'Erro ao atualizar usuário.');
+                                }
+                            } catch (error) {
+                                showAppModal({ title: "Erro", bodyHtml: `<p>Falha na atualização: ${error.message}</p>`, buttons: [{ text: "OK", class: "primary" }] });
+                                if (element.type === 'checkbox') { element.checked = !element.checked; } else { loadUsers(); }
+                            } finally {
+                                element.disabled = false;
+                            }
+                        };
+
+                        addUserBtn.addEventListener('click', () => {
+                            showAppModal({
+                                title: "Adicionar Novo Usuário",
+                                bodyHtml: `
+                                <div class="form-field"><label for="new-user-name">Nome</label><input type="text" id="new-user-name" placeholder="Nome completo"></div>
+                                <div class="form-field"><label for="new-user-email">Email</label><input type="email" id="new-user-email" placeholder="email@dominio.com"></div>
+                                <div class="form-field"><label for="new-user-role">Função</label><select id="new-user-role"><option value="usuario" selected>Usuário</option><option value="admin">Admin</option></select></div>
+                            `,
+                                buttons: [
+                                    { text: "Cancelar", class: "secondary" },
+                                    {
+                                        text: "Adicionar Usuário",
+                                        class: "primary",
+                                        onClick: async (btn) => {
+                                            const payload = {
+                                                nome: document.getElementById('new-user-name').value,
+                                                email: document.getElementById('new-user-email').value,
+                                                funcao: document.getElementById('new-user-role').value,
+                                                autorizado: true
+                                            };
+                                            if (!payload.nome || !payload.email) {
+                                                showAppModal({ title: "Erro", bodyHtml: "<p>Nome e Email são obrigatórios.</p>", buttons: [{ text: "OK", class: "primary" }] });
+                                                return false;
+                                            }
+                                            btn.classList.add('is-loading');
+                                            btn.disabled = true;
+                                            try {
+                                                const response = await fetch('/api/admin/usuarios', {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify(payload)
+                                                });
+                                                if (!response.ok) {
+                                                    const err = await response.json();
+                                                    throw new Error(err.detail || 'Erro desconhecido.');
+                                                }
+                                                loadUsers();
+                                                closeAppModal();
+                                            } catch (error) {
+                                                showAppModal({ title: "Erro", bodyHtml: `<p>${error.message}</p>`, buttons: [{ text: "OK", class: "primary" }] });
+                                            }
+                                            return false;
+                                        }
+                                    }
+                                ]
+                            });
+                        });
+                        
+                        setupLogoutButton();
+                        loadUsers();
+
+                    } catch (error) {
+                         console.error("Erro ao inicializar a página de admin:", error);
+                        const container = document.querySelector('.container');
+                        if (container) {
+                            container.innerHTML = '<h1>Ocorreu um erro ao carregar a página.</h1><p>Por favor, tente recarregar ou contate o suporte. Detalhes do erro foram registrados no console.</p>';
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>

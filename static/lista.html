@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Listagem de Precificações</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+    <div class="top-green-bar"></div>
+    <nav class="main-nav">
+        <a href="/alertas" id="alertas-link" class="nav-item hidden">Dashboard de Alertas</a>
+        <a href="/calculadora" class="nav-item">Calcular Preço</a>
+        <a href="/lista" class="nav-item">Consultar Precificações</a>
+        <a href="/configuracoes" class="nav-item">Configurações</a>
+        <a href="/regras" id="regras-link" class="nav-item hidden">Gerenciar Regras</a>
+        <a href="/campanhas" id="campanhas-link" class="nav-item hidden">Gerenciar Campanhas</a>
+        <a href="/historico" id="historico-link" class="nav-item hidden">Histórico</a>
+        <a href="/perfil" class="nav-item">Meu Perfil</a>
+        <a href="/admin" id="admin-link" class="nav-item hidden">Admin</a>
+    </nav>
+    <div class="container">
+        <div class="header">
+            <h1>Consultar Precificações</h1>
+            <div id="auth-container" class="auth-container hidden">
+                <img id="profile-pic" src="" alt="Foto do Perfil" class="profile-pic">
+                <span id="user-info" class="user-greeting"></span>
+                <button id="logout-btn" class="app-button auth-button logout">Logout</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="filter-search-section">
+        <div class="input-grid">
+            <div class="form-group">
+                <label for="lojaFilter">Loja / Marketplace</label>
+                <select id="lojaFilter" class="filter-input"></select>
+            </div>
+            <div class="form-group">
+                <label for="categoryFilter">Categoria</label>
+                <select id="categoryFilter" class="filter-input"></select>
+            </div>
+            <div class="form-group">
+                <label for="planFilter">Plano de Venda</label>
+                <select id="planFilter" class="filter-input">
+                    <option value="">Todos os Planos</option>
+                    <option value="classico">Com Preço Clássico</option>
+                    <option value="premium">Com Preço Premium</option>
+                </select>
+            </div>
+            <div class="form-group"><label for="skuFilter">SKU</label><input type="text" id="skuFilter"
+                    class="filter-input" placeholder="Filtrar por SKU..."></div>
+            <div class="form-group full-width">
+                <label for="tituloFilter">Título do Produto</label>
+                <input type="text" id="tituloFilter" class="filter-input" placeholder="Filtrar por título...">
+            </div>
+        </div>
+    </div>
+    <div id="product-list-container"></div>
+
+    <div id="list-message-container" class="container" style="text-align: center; display: none;">
+        <div class="form-section">
+            <p id="list-message-text"></p>
+            <span id="list-loader" class="hidden">
+                <div class="loader-spinner"></div>
+            </span>
+        </div>
+    </div>
+
+    <template id="product-item-template">
+        <div class="product-listing-item">
+            <button class="action-menu-button">&vellip;</button>
+            <div class="action-menu">
+                <div class="action-menu-item edit">Editar</div>
+                <div class="action-menu-item delete">Excluir</div>
+            </div>
+            <div class="product-header">
+                <div class="form-group"><label>Título do Produto</label><input type="text" data-field="titulo" readonly>
+                </div>
+                <div class="form-group"><label>SKU</label><input type="text" data-field="sku" readonly></div>
+                <div class="form-group"><label>Marketplace / Loja</label><input type="text"
+                        data-field="marketplace_loja" readonly></div>
+            </div>
+            <div class="product-details">
+                <div class="form-group"><label>Custo Total (R$)</label><input type="text" data-field="custo_total"
+                        readonly></div>
+                <div class="form-group"><label>Venda Clássico (R$)</label><input type="text" data-field="venda_classico"
+                        readonly></div>
+                <div class="form-group"><label>Margem Clássico (%)</label><input type="text"
+                        data-field="margem_classico" readonly class="margem-output"></div>
+                <div class="form-group"><label>Venda Premium (R$)</label><input type="text" data-field="venda_premium"
+                        readonly></div>
+                <div class="form-group"><label>Margem Premium (%)</label><input type="text" data-field="margem_premium"
+                        readonly class="margem-output"></div>
+                <div class="form-group"><label>Calculado por</label><input type="text" data-field="calculado_por"
+                        readonly></div>
+                <div class="form-group"><label>Data do Cálculo</label><input type="text" data-field="data_calculo"
+                        readonly></div>
+            </div>
+        </div>
+    </template>
+
+    <div id="app-modal" class="modal-overlay"></div>
+
+    <script src="/static/app.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            checkAuthStatusAndUpdateNav().then(user => {
+                if (user) {
+                    try {
+                        const productListContainer = document.getElementById('product-list-container');
+                        const productItemTemplate = document.getElementById('product-item-template');
+                        const filterInputs = document.querySelectorAll('.filter-input');
+                        const messageContainer = document.getElementById('list-message-container');
+                        const messageText = document.getElementById('list-message-text');
+                        const loader = document.getElementById('list-loader');
+                        let debounceTimer;
+
+                        const populateLojas = async () => {
+                            const lojaFilter = document.getElementById('lojaFilter');
+                            try {
+                                const response = await fetch('/api/config/lojas');
+                                if (!response.ok) throw new Error('Falha ao carregar lojas.');
+                                const lojas = await response.json();
+                                lojaFilter.innerHTML = '<option value="">Todas as Lojas</option>';
+                                lojas.forEach(loja => {
+                                    const optionValue = `${loja.marketplace}|${loja.id_loja}`;
+                                    const optionText = `${loja.marketplace} - ${loja.id_loja}`;
+                                    const option = new Option(optionText, optionValue);
+                                    lojaFilter.add(option);
+                                });
+                            } catch (error) {
+                                lojaFilter.innerHTML = `<option value="">${error.message}</option>`;
+                            }
+                        };
+                        const populateCategorias = async () => {
+                            const categoryFilter = document.getElementById('categoryFilter');
+                            try {
+                                const response = await fetch('/api/categorias-precificacao');
+                                if (!response.ok) throw new Error('Falha ao carregar categorias.');
+                                const categorias = await response.json();
+                                categoryFilter.innerHTML = '<option value="">Todas as Categorias</option>';
+                                categorias.forEach(cat => {
+                                    const option = new Option(cat.nome, cat.nome);
+                                    categoryFilter.add(option);
+                                });
+                            } catch (error) {
+                                categoryFilter.innerHTML = `<option value="">${error.message}</option>`;
+                            }
+                        };
+                        const showListMessage = (text, showLoader = false) => {
+                            messageContainer.style.display = 'block';
+                            productListContainer.innerHTML = '';
+                            messageText.textContent = text;
+                            loader.classList.toggle('hidden', !showLoader);
+                        };
+                        const hideListMessage = () => {
+                            messageContainer.style.display = 'none';
+                        };
+                        const formatCurrency = (value) => `R$ ${parseFloat(value || 0).toFixed(2).replace('.', ',')}`;
+                        const formatPercent = (value) => `${parseFloat(value || 0).toFixed(2).replace('.', ',')}%`;
+                        const renderProducts = (products) => {
+                            productListContainer.innerHTML = '';
+                            if (products.length === 0) {
+                                showListMessage('Nenhum resultado encontrado para os filtros aplicados.');
+                                return;
+                            }
+                            hideListMessage();
+                            products.forEach(product => {
+                                const templateClone = productItemTemplate.content.cloneNode(true);
+                                const productItemDiv = templateClone.querySelector('.product-listing-item');
+                                productItemDiv.dataset.id = product.id;
+                                const fields = {
+                                    titulo: product.titulo || 'N/A',
+                                    sku: product.sku || 'N/A',
+                                    marketplace_loja: `${product.marketplace || ''} - ${product.id_loja || ''}`,
+                                    custo_total: formatCurrency(product.custo_total),
+                                    venda_classico: formatCurrency(product.venda_classico),
+                                    margem_classico: formatPercent(product.margem_classico),
+                                    venda_premium: formatCurrency(product.venda_premium),
+                                    margem_premium: formatPercent(product.margem_premium),
+                                    calculado_por: product.calculado_por ? product.calculado_por.split('@')[0] : 'N/A',
+                                    data_calculo: product.data_calculo ? new Date(product.data_calculo).toLocaleString('pt-BR') : 'N/A',
+                                };
+                                templateClone.querySelectorAll('input[data-field]').forEach(input => {
+                                    const fieldName = input.dataset.field;
+                                    input.value = fields[fieldName];
+                                    if (fieldName.startsWith('margem')) {
+                                        const value = parseFloat(product[fieldName] || 0);
+                                        input.classList.remove('text-success', 'text-danger');
+                                        if (value > 0) input.classList.add('text-success');
+                                        else if (value < 0) input.classList.add('text-danger');
+                                    }
+                                });
+                                productListContainer.appendChild(templateClone);
+                            });
+                        };
+                        const fetchAndRenderProducts = async () => {
+                            showListMessage('Carregando precificações...', true);
+                            const params = new URLSearchParams();
+                            const lojaValue = document.getElementById('lojaFilter').value;
+                            if (lojaValue) {
+                                const [marketplace, id_loja] = lojaValue.split('|');
+                                params.append('marketplace', marketplace);
+                                params.append('id_loja', id_loja);
+                            }
+                            params.append('plano', document.getElementById('planFilter').value);
+                            params.append('categoria', document.getElementById('categoryFilter').value);
+                            params.append('sku', document.getElementById('skuFilter').value);
+                            params.append('titulo', document.getElementById('tituloFilter').value);
+                            try {
+                                const response = await fetch(`/api/precificacao/listar?${params.toString()}`);
+                                if (!response.ok) throw new Error(`Erro na rede: ${response.statusText}`);
+                                const products = await response.json();
+                                renderProducts(products);
+                            } catch (error) {
+                                showListMessage(`Falha ao carregar os dados: ${error.message}`);
+                                console.error('Erro ao buscar precificações:', error);
+                            }
+                        };
+                        filterInputs.forEach(input => {
+                            const eventType = input.tagName === 'SELECT' ? 'change' : 'keyup';
+                            input.addEventListener(eventType, () => {
+                                clearTimeout(debounceTimer);
+                                debounceTimer = setTimeout(fetchAndRenderProducts, 500);
+                            });
+                        });
+                        productListContainer.addEventListener('click', async (e) => {
+                            const target = e.target;
+                            const productItem = target.closest('.product-listing-item');
+                            if (!productItem) return;
+                            const recordId = productItem.dataset.id;
+                            const sku = productItem.querySelector('input[data-field="sku"]').value;
+                            const menu = productItem.querySelector('.action-menu');
+                            if (target.classList.contains('action-menu-button')) {
+                                document.querySelectorAll('.action-menu').forEach(m => {
+                                    if (m !== menu) m.style.display = 'none';
+                                });
+                                menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+                            } else if (target.classList.contains('edit')) {
+                                window.location.href = `/editar?id=${encodeURIComponent(recordId)}`;
+                            } else if (target.classList.contains('delete')) {
+                                menu.style.display = 'none';
+                                showAppModal({
+                                    title: 'Confirmar Exclusão',
+                                    bodyHtml: `<p>Tem certeza que deseja excluir a precificação do SKU <strong>${sku}</strong>? Esta ação não pode ser desfeita.</p>`,
+                                    buttons: [
+                                        { text: 'Cancelar', class: 'secondary' },
+                                        {
+                                            text: 'Excluir',
+                                            class: 'delete',
+                                            onClick: async (button) => {
+                                                button.classList.add('is-loading');
+                                                button.disabled = true;
+                                                try {
+                                                    const response = await fetch(`/api/precificacao/excluir/${recordId}`, { method: 'DELETE' });
+                                                    if (!response.ok) {
+                                                        const errText = await response.text();
+                                                        try {
+                                                            const err = JSON.parse(errText);
+                                                            throw new Error(err.detail || 'Erro no servidor');
+                                                        } catch {
+                                                            throw new Error(`Erro no servidor: ${errText}`);
+                                                        }
+                                                    }
+                                                    productItem.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+                                                    productItem.style.opacity = '0';
+                                                    productItem.style.transform = 'scale(0.95)';
+                                                    setTimeout(() => {
+                                                        productItem.remove();
+                                                        if (productListContainer.children.length === 0) {
+                                                            fetchAndRenderProducts();
+                                                        }
+                                                    }, 500);
+                                                } catch (error) {
+                                                    showAppModal({
+                                                        title: 'Erro',
+                                                        bodyHtml: `<p>Não foi possível excluir o registro: ${error.message}</p>`,
+                                                        buttons: [{ text: 'OK', class: 'primary' }]
+                                                    });
+                                                } finally {
+                                                    return true;
+                                                }
+                                            }
+                                        }
+                                    ]
+                                });
+                            }
+                        });
+                        document.addEventListener('click', (e) => {
+                            if (!e.target.closest('.product-listing-item')) {
+                                document.querySelectorAll('.action-menu').forEach(menu => menu.style.display = 'none');
+                            }
+                        });
+
+                        setupLogoutButton();
+                        populateLojas();
+                        populateCategorias();
+                        fetchAndRenderProducts();
+                    } catch (error) {
+                        console.error("Erro ao inicializar a página de lista:", error);
+                        const container = document.querySelector('.container');
+                        if (container) {
+                            container.innerHTML = '<h1>Ocorreu um erro ao carregar a página.</h1><p>Por favor, tente recarregar ou contate o suporte. Detalhes do erro foram registrados no console.</p>';
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>

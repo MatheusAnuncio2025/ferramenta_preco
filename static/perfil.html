@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meu Perfil - Ferramenta de Precificação</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+    <div class="top-green-bar"></div>
+     <nav class="main-nav">
+        <a href="/alertas" id="alertas-link" class="nav-item hidden">Dashboard de Alertas</a>
+        <a href="/calculadora" class="nav-item">Calcular Preço</a>
+        <a href="/lista" class="nav-item">Consultar Precificações</a>
+        <a href="/configuracoes" class="nav-item">Configurações</a>
+        <a href="/regras" id="regras-link" class="nav-item hidden">Gerenciar Regras</a>
+        <a href="/campanhas" id="campanhas-link" class="nav-item hidden">Gerenciar Campanhas</a>
+        <a href="/historico" id="historico-link" class="nav-item hidden">Histórico</a>
+        <a href="/perfil" class="nav-item">Meu Perfil</a>
+        <a href="/admin" id="admin-link" class="nav-item hidden">Admin</a>
+    </nav>
+    <div class="container">
+        <div class="header">
+            <h1>Meu Perfil</h1>
+            <div id="auth-container" class="auth-container hidden">
+                <img id="profile-pic" src="" alt="Foto do Perfil" class="profile-pic">
+                <span id="user-info" class="user-greeting"></span>
+                <button id="logout-btn" class="app-button auth-button logout">Logout</button>
+            </div>
+        </div>
+
+        <div id="initial-loader" class="form-section" style="text-align: center; padding: 40px;">
+            <p>Carregando perfil... <span class="loader-spinner"></span></p>
+        </div>
+
+        <div id="profile-content" class="form-section hidden">
+            <div class="profile-grid">
+                <aside class="profile-picture-section">
+                    <img id="profile-main-pic" src="" alt="Foto do Perfil" class="profile-main-pic">
+                    <div class="upload-btn-wrapper">
+                        <button class="btn-upload" id="upload-btn-label">Alterar Foto</button>
+                        <input type="file" id="photo-upload-input" name="myfile" accept="image/*">
+                    </div>
+                    <small id="upload-status"
+                        style="display: flex; align-items: center; justify-content: center; margin-top: 10px; min-height: 20px;"></small>
+                </aside>
+                <main>
+                    <div class="form-row">
+                        <div class="form-field">
+                            <label>Nome</label>
+                            <input type="text" id="profile-nome" readonly>
+                        </div>
+                        <div class="form-field">
+                            <label>Email</label>
+                            <input type="email" id="profile-email" readonly>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-field">
+                            <label for="profile-telefone">Telefone</label>
+                            <input type="text" id="profile-telefone" placeholder="Seu telefone...">
+                        </div>
+                        <div class="form-field">
+                            <label for="profile-departamento">Departamento</label>
+                            <input type="text" id="profile-departamento" placeholder="Seu departamento...">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-field">
+                            <label for="profile-membro-desde">Membro Desde</label>
+                            <input type="text" id="profile-membro-desde" readonly>
+                        </div>
+                        <div class="form-field">
+                            <label for="profile-ultimo-login">Último Login</label>
+                            <input type="text" id="profile-ultimo-login" readonly>
+                        </div>
+                    </div>
+                    <div class="button-container">
+                        <button id="save-profile-btn" class="app-button save-button">Salvar Alterações</button>
+                    </div>
+                </main>
+            </div>
+        </div>
+    </div>
+
+    <div id="app-modal" class="modal-overlay"></div>
+
+    <script src="/static/app.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            checkAuthStatusAndUpdateNav().then(user => {
+                if (user) {
+                    try {
+                        const elements = {
+                            initialLoader: document.getElementById('initial-loader'),
+                            profileContent: document.getElementById('profile-content'),
+                            profileNome: document.getElementById('profile-nome'),
+                            profileEmail: document.getElementById('profile-email'),
+                            profileTelefone: document.getElementById('profile-telefone'),
+                            profileDepartamento: document.getElementById('profile-departamento'),
+                            profileMembroDesde: document.getElementById('profile-membro-desde'),
+                            profileUltimoLogin: document.getElementById('profile-ultimo-login'),
+                            profileMainPic: document.getElementById('profile-main-pic'),
+                            photoUploadInput: document.getElementById('photo-upload-input'),
+                            uploadBtnLabel: document.getElementById('upload-btn-label'),
+                            uploadStatus: document.getElementById('upload-status'),
+                            saveProfileBtn: document.getElementById('save-profile-btn'),
+                        };
+
+                        const loadProfileData = async () => {
+                            try {
+                                const response = await fetch('/api/perfil/meus-dados');
+                                if (!response.ok) throw new Error('Falha ao carregar dados do perfil.');
+                                const data = await response.json();
+
+                                elements.profileNome.value = data.nome || '';
+                                elements.profileEmail.value = data.email || '';
+                                elements.profileTelefone.value = data.telefone || '';
+                                elements.profileDepartamento.value = data.departamento || '';
+                                elements.profileMainPic.src = data.foto_url || `https://placehold.co/150x150/2ecc71/ffffff?text=${data.nome ? data.nome[0] : 'U'}`;
+
+                                if (data.data_cadastro) {
+                                    elements.profileMembroDesde.value = new Date(data.data_cadastro).toLocaleString('pt-BR');
+                                }
+                                if (data.ultimo_login) {
+                                    elements.profileUltimoLogin.value = new Date(data.ultimo_login).toLocaleString('pt-BR');
+                                }
+
+                                elements.initialLoader.classList.add('hidden');
+                                elements.profileContent.classList.remove('hidden');
+                            } catch (error) {
+                                console.error(error);
+                                elements.initialLoader.innerHTML = `<p style="color: var(--danger-color);">${error.message}</p>`;
+                            }
+                        };
+
+                        elements.saveProfileBtn.addEventListener('click', async () => {
+                            const payload = {
+                                telefone: elements.profileTelefone.value,
+                                departamento: elements.profileDepartamento.value
+                            };
+                            elements.saveProfileBtn.classList.add('is-loading');
+                            elements.saveProfileBtn.disabled = true;
+                            try {
+                                const response = await fetch('/api/perfil/meus-dados', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(payload)
+                                });
+                                if (!response.ok) throw new Error((await response.json()).detail || 'Erro ao salvar.');
+                                showAppModal({
+                                    title: "Sucesso",
+                                    bodyHtml: "<p>Perfil atualizado com sucesso!</p>",
+                                    buttons: [{ text: "OK", class: "primary" }]
+                                });
+                            } catch (error) {
+                                showAppModal({
+                                    title: "Erro",
+                                    bodyHtml: `<p>${error.message}</p>`,
+                                    buttons: [{ text: "OK", class: "primary" }]
+                                });
+                            } finally {
+                                elements.saveProfileBtn.classList.remove('is-loading');
+                                elements.saveProfileBtn.disabled = false;
+                            }
+                        });
+
+                        elements.photoUploadInput.addEventListener('change', async () => {
+                            const file = elements.photoUploadInput.files[0];
+                            if (!file) return;
+                            const formData = new FormData();
+                            formData.append('file', file);
+                            elements.uploadStatus.innerHTML = 'Enviando... <span class="loader-spinner"></span>';
+                            elements.uploadBtnLabel.disabled = true;
+                            elements.photoUploadInput.disabled = true;
+                            try {
+                                const response = await fetch('/api/perfil/upload-foto', {
+                                    method: 'POST',
+                                    body: formData
+                                });
+                                if (!response.ok) throw new Error((await response.json()).detail || 'Falha no upload.');
+                                const data = await response.json();
+                                elements.profileMainPic.src = data.new_photo_url;
+                                document.getElementById('profile-pic').src = data.new_photo_url;
+                                elements.uploadStatus.innerHTML = 'Foto alterada!';
+                                elements.uploadStatus.style.color = 'var(--primary-color)';
+                                setTimeout(() => elements.uploadStatus.innerHTML = '', 3000);
+                            } catch (error) {
+                                elements.uploadStatus.innerHTML = `Erro: ${error.message}`;
+                                elements.uploadStatus.style.color = 'var(--danger-color)';
+                            } finally {
+                                elements.uploadBtnLabel.disabled = false;
+                                elements.photoUploadInput.disabled = false;
+                            }
+                        });
+                        
+                        setupLogoutButton();
+                        loadProfileData();
+                    } catch (error) {
+                        console.error("Erro ao inicializar a página de perfil:", error);
+                        const container = document.querySelector('.container');
+                        if (container) {
+                            container.innerHTML = '<h1>Ocorreu um erro ao carregar a página.</h1><p>Por favor, tente recarregar ou contate o suporte. Detalhes do erro foram registrados no console.</p>';
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>

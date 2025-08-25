@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Precificar Campanha</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .product-header-card {
+            background-color: #f8f9fa;
+            border: 1px solid var(--border-color);
+            border-left-width: 4px;
+            border-left-color: var(--primary-color);
+            padding: 15px;
+            margin-bottom: 25px;
+        }
+        .product-header-card .product-header,
+        .product-header-card .product-details {
+            padding: 0;
+            border: none;
+            margin: 0;
+        }
+        .campaign-details-card {
+            background-color: #eef7ff;
+            border: 1px solid #bde0ff;
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 20px;
+            font-size: 0.9rem;
+        }
+        .campaign-details-card strong {
+            margin-right: 5px;
+        }
+        .campaign-details-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="top-green-bar"></div>
+    <nav class="main-nav">
+        <a href="/alertas" id="alertas-link" class="nav-item hidden">Dashboard de Alertas</a>
+        <a href="/calculadora" class="nav-item">Calcular Preço</a>
+        <a href="/lista" class="nav-item">Consultar Precificações</a>
+        <a href="/configuracoes" class="nav-item">Configurações</a>
+        <a href="/regras" id="regras-link" class="nav-item hidden">Gerenciar Regras</a>
+        <a href="/campanhas" id="campanhas-link" class="nav-item hidden">Gerenciar Campanhas</a>
+        <a href="/historico" id="historico-link" class="nav-item hidden">Histórico</a>
+        <a href="/perfil" class="nav-item">Meu Perfil</a>
+        <a href="/admin" id="admin-link" class="nav-item hidden">Admin</a>
+    </nav>
+    <div class="container">
+        <div class="header">
+            <h1>Adicionar Preço de Campanha</h1>
+            <div id="auth-container" class="auth-container hidden">
+                <img id="profile-pic" src="" alt="Foto do Perfil" class="profile-pic">
+                <span id="user-info" class="user-greeting"></span>
+                <button id="logout-btn" class="app-button auth-button logout">Logout</button>
+            </div>
+        </div>
+
+        <div id="loader" class="form-section" style="text-align: center;"><p>Carregando dados... <span class="loader-spinner"></span></p></div>
+
+        <div id="main-content" class="hidden">
+            <div id="product-header-container"></div>
+            <template id="product-item-template">
+                <div class="product-listing-item product-header-card">
+                    <div class="product-header">
+                        <div class="form-group"><label>Título do Produto</label><input type="text" data-field="titulo" readonly></div>
+                        <div class="form-group"><label>SKU</label><input type="text" data-field="sku" readonly></div>
+                        <div class="form-group"><label>Marketplace / Loja</label><input type="text" data-field="marketplace_loja" readonly></div>
+                    </div>
+                    <div class="product-details">
+                        <div class="form-group"><label>Custo Total (R$)</label><input type="text" data-field="custo_total" readonly></div>
+                        <div class="form-group"><label>Venda Clássico (R$)</label><input type="text" data-field="venda_classico" readonly></div>
+                        <div class="form-group"><label>Margem Clássico (%)</label><input type="text" data-field="margem_classico" readonly class="margem-output"></div>
+                        <div class="form-group"><label>Venda Premium (R$)</label><input type="text" data-field="venda_premium" readonly></div>
+                        <div class="form-group"><label>Margem Premium (%)</label><input type="text" data-field="margem_premium" readonly class="margem-output"></div>
+                    </div>
+                </div>
+            </template>
+
+            <div class="form-section">
+                <div class="form-row" style="grid-template-columns: 1fr;">
+                    <div class="form-field">
+                        <label for="campaign-select">Selecione a Campanha</label>
+                        <select id="campaign-select"></select>
+                    </div>
+                </div>
+                <div id="campaign-details-card" class="campaign-details-card hidden"></div>
+            </div>
+
+            <div id="pricing-form-container">
+                </div>
+            
+            <div class="button-container">
+                <button type="button" id="save-campaign-price-btn" class="app-button save-button" disabled>Salvar Preço de Campanha</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="app-modal" class="modal-overlay"></div>
+    <script src="/static/app.js"></script>
+    <script src="/static/campaignPricingLogic.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const baseId = new URLSearchParams(window.location.search).get('base_id');
+            if (!baseId) {
+                document.getElementById('loader').innerHTML = '<p class="text-danger">Erro: ID da precificação base não fornecido.</p>';
+                return;
+            }
+
+            checkAuthStatusAndUpdateNav().then(user => {
+                if (user) {
+                    try {
+                        setupLogoutButton();
+                        // A função fetchData está definida em campaignPricingLogic.js e será chamada a partir de lá.
+                        // O script campaignPricingLogic.js já contém a lógica de inicialização.
+                    } catch (error) {
+                        console.error("Erro ao inicializar a página de precificação de campanha:", error);
+                        const container = document.querySelector('.container');
+                        if (container) {
+                            container.innerHTML = '<h1>Ocorreu um erro ao carregar a página.</h1><p>Por favor, tente recarregar ou contate o suporte. Detalhes do erro foram registrados no console.</p>';
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>

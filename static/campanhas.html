@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Gerenciar Campanhas</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .rules-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        .rules-table th,
+        .rules-table td {
+            border: 1px solid var(--border-color);
+            padding: 8px;
+            text-align: left;
+            vertical-align: top;
+        }
+
+        .rules-table th {
+            background-color: #f8f9fa;
+            font-size: 0.9rem;
+        }
+
+        .rules-table input,
+        .rules-table select {
+            width: 100%;
+            padding: 6px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+            font-size: 0.9rem;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 4px;
+        }
+
+        .input-group select {
+            flex-basis: 80px;
+        }
+
+        .input-group input {
+            flex-grow: 1;
+        }
+
+        .actions-cell {
+            text-align: center;
+            width: 80px;
+        }
+
+        .delete-row-btn {
+            background-color: var(--danger-color);
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="top-green-bar"></div>
+    <nav class="main-nav">
+        <a href="/alertas" id="alertas-link" class="nav-item hidden">Dashboard de Alertas</a>
+        <a href="/calculadora" class="nav-item">Calcular Preço</a>
+        <a href="/lista" class="nav-item">Consultar Precificações</a>
+        <a href="/configuracoes" class="nav-item">Configurações</a>
+        <a href="/regras" id="regras-link" class="nav-item hidden">Gerenciar Regras</a>
+        <a href="/campanhas" id="campanhas-link" class="nav-item hidden">Gerenciar Campanhas</a>
+        <a href="/historico" id="historico-link" class="nav-item hidden">Histórico</a>
+        <a href="/perfil" class="nav-item">Meu Perfil</a>
+        <a href="/admin" id="admin-link" class="nav-item hidden">Admin</a>
+    </nav>
+    <div class="container" style="max-width: 1400px;">
+        <div class="header">
+            <h1>Gerenciamento de Campanhas</h1>
+            <div id="auth-container" class="auth-container hidden">
+                <img id="profile-pic" src="" alt="Foto do Perfil" class="profile-pic">
+                <span id="user-info" class="user-greeting"></span>
+                <button id="logout-btn" class="app-button auth-button logout">Logout</button>
+            </div>
+        </div>
+
+        <div id="loader" class="form-section" style="text-align: center;">
+            <p>Carregando campanhas... <span class="loader-spinner"></span></p>
+        </div>
+
+        <div id="rules-content" class="form-section hidden">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <p>Crie a "moldura" da campanha. O desconto específico de cada produto será definido na calculadora.</p>
+                <div>
+                    <button id="save-btn" class="app-button save-button">Salvar Alterações</button>
+                    <button id="add-btn" class="app-button" style="background-color: var(--secondary-color);">+
+                        Adicionar Campanha</button>
+                </div>
+            </div>
+            <div style="overflow-x: auto;">
+                <table class="rules-table" id="campaigns-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 25%;">Nome / Tipo</th>
+                            <th style="width: 25%;">Cupom (custo vendedor)</th>
+                            <th style="width: 25%;">Cashback (crédito vendedor)</th>
+                            <th style="width: 20%;">Período</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="app-modal" class="modal-overlay"></div>
+
+    <template id="campaign-row-template">
+        <tr>
+            <td>
+                <input type="text" data-field="nome" placeholder="Nome da Campanha" style="margin-bottom: 4px;">
+                <select data-field="tipo_campanha">
+                    <option value="">Selecione o Tipo</option>
+                    <option value="Oficial">Oficial</option>
+                    <option value="Lojista">Lojista</option>
+                </select>
+            </td>
+            <td>
+                <div class="input-group">
+                    <select data-field="tipo_cupom">
+                        <option value="">Tipo</option>
+                        <option value="PERCENTUAL">%</option>
+                        <option value="FIXO">R$</option>
+                    </select>
+                    <input type="number" step="0.01" data-field="valor_cupom" placeholder="Valor">
+                </div>
+            </td>
+            <td>
+                <div class="input-group">
+                    <select data-field="tipo_cashback">
+                        <option value="">Tipo</option>
+                        <option value="PERCENTUAL">%</option>
+                        <option value="FIXO">R$</option>
+                    </select>
+                    <input type="number" step="0.01" data-field="valor_cashback" placeholder="Valor">
+                </div>
+            </td>
+            <td>
+                <input type="date" data-field="data_inicio" title="Data de Início" style="margin-bottom: 4px;">
+                <input type="date" data-field="data_fim" title="Data de Fim">
+            </td>
+            <td class="actions-cell"><button class="delete-row-btn">Excluir</button></td>
+        </tr>
+    </template>
+
+    <script src="/static/app.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            checkAuthStatusAndUpdateNav().then(user => {
+                if (user && user.role === 'admin') {
+                    try {
+                        const loader = document.getElementById('loader');
+                        const content = document.getElementById('rules-content');
+                        const tableBody = document.getElementById('campaigns-table').querySelector('tbody');
+                        const template = document.getElementById('campaign-row-template');
+                        const addBtn = document.getElementById('add-btn');
+                        const saveBtn = document.getElementById('save-btn');
+
+                        const renderTable = (data) => {
+                            tableBody.innerHTML = '';
+                            data.forEach(rowData => {
+                                const clone = template.content.cloneNode(true);
+                                const row = clone.querySelector('tr');
+                                row.dataset.id = rowData.id;
+                                Array.from(row.querySelectorAll('[data-field]')).forEach(input => {
+                                    const field = input.dataset.field;
+                                    if (rowData[field] !== null && rowData[field] !== undefined) {
+                                        input.value = input.type === 'date'
+                                            ? new Date(rowData[field]).toISOString().split('T')[0]
+                                            : rowData[field];
+                                    }
+                                });
+                                row.querySelector('.delete-row-btn').onclick = (e) => e.target.closest('tr').remove();
+                                tableBody.appendChild(clone);
+                            });
+                        };
+
+                        const loadCampaigns = async () => {
+                            try {
+                                const response = await fetch('/api/campanhas');
+                                if (!response.ok) throw new Error('Falha ao carregar campanhas.');
+                                const data = await response.json();
+                                renderTable(data);
+                                loader.classList.add('hidden');
+                                content.classList.remove('hidden');
+                            } catch (error) {
+                                loader.innerHTML = `<p class="text-danger">${error.message}</p>`;
+                            }
+                        };
+
+                        addBtn.addEventListener('click', () => {
+                            const clone = template.content.cloneNode(true);
+                            clone.querySelector('.delete-row-btn').onclick = (e) => e.target.closest('tr').remove();
+                            tableBody.appendChild(clone);
+                        });
+
+                        saveBtn.addEventListener('click', async () => {
+                            const payload = Array.from(tableBody.querySelectorAll('tr')).map(row => {
+                                const rowData = { id: row.dataset.id || null };
+                                row.querySelectorAll('[data-field]').forEach(input => {
+                                    let value = input.value.trim();
+                                    if (input.type === 'number' && value !== '') {
+                                        value = parseFloat(value);
+                                    }
+                                    rowData[input.dataset.field] = value === '' ? null : value;
+                                });
+                                return rowData;
+                            });
+                            saveBtn.classList.add('is-loading');
+                            saveBtn.disabled = true;
+                            try {
+                                const response = await fetch('/api/campanhas', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(payload),
+                                });
+                                if (!response.ok) throw new Error((await response.json()).detail || 'Erro no servidor.');
+                                showAppModal({ title: 'Sucesso!', bodyHtml: '<p>Campanhas salvas com sucesso!</p>', buttons: [{ text: 'OK', class: 'primary' }] });
+                                loadCampaigns();
+                            } catch (error) {
+                                showAppModal({ title: 'Erro ao Salvar', bodyHtml: `<p>${error.message}</p>`, buttons: [{ text: 'OK', class: 'primary' }] });
+                            } finally {
+                                saveBtn.classList.remove('is-loading');
+                                saveBtn.disabled = false;
+                            }
+                        });
+
+                        setupLogoutButton();
+                        loadCampaigns();
+
+                    } catch (error) {
+                        console.error("Erro ao inicializar a página de campanhas:", error);
+                        const container = document.querySelector('.container');
+                        if (container) {
+                            container.innerHTML = '<h1>Ocorreu um erro ao carregar a página.</h1><p>Por favor, tente recarregar ou contate o suporte. Detalhes do erro foram registrados no console.</p>';
+                        }
+                    }
+                } else if (user && user.role !== 'admin') {
+                     window.location.href = '/calculadora';
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>

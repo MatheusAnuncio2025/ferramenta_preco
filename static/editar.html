@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editar Precificação</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .highlighted-weight {
+            background-color: #e8f5e9 !important;
+            font-weight: bold;
+        }
+        .campaign-details-card {
+            background-color: #eef7ff;
+            border: 1px solid #bde0ff;
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 10px;
+            font-size: 0.9rem;
+        }
+        .campaign-details-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="top-green-bar"></div>
+    <nav class="main-nav">
+        <a href="/alertas" id="alertas-link" class="nav-item hidden">Dashboard de Alertas</a>
+        <a href="/calculadora" class="nav-item">Calcular Preço</a>
+        <a href="/lista" class="nav-item">Consultar Precificações</a>
+        <a href="/configuracoes" class="nav-item">Configurações</a>
+        <a href="/regras" id="regras-link" class="nav-item hidden">Gerenciar Regras</a>
+        <a href="/campanhas" id="campanhas-link" class="nav-item hidden">Gerenciar Campanhas</a>
+        <a href="/historico" id="historico-link" class="nav-item hidden">Histórico</a>
+        <a href="/perfil" class="nav-item">Meu Perfil</a>
+        <a href="/admin" id="admin-link" class="nav-item hidden">Admin</a>
+    </nav>
+    <div class="container">
+        <div class="header">
+            <h1>Editar Precificação</h1>
+            <div id="auth-container" class="auth-container hidden">
+                <img id="profile-pic" src="" alt="Foto do Perfil" class="profile-pic">
+                <span id="user-info" class="user-greeting"></span>
+                <button id="logout-btn" class="app-button auth-button logout">Logout</button>
+            </div>
+        </div>
+
+        <div id="initial-loader" class="form-section" style="text-align: center; padding: 40px;">
+            <p>Carregando dados para edição... <span class="loader-spinner"></span></p>
+        </div>
+
+        <div id="error-message" class="form-section hidden"
+            style="text-align: center; color: var(--danger-color); padding: 40px;"></div>
+
+        <form id="pricing-form" class="hidden"></form>
+
+        <section id="campaigns-section" class="form-section hidden">
+            <h2>Campanhas Vinculadas</h2>
+            <div id="linked-campaigns-list">
+                <p class="no-rules-text">Carregando campanhas...</p>
+            </div>
+            
+            <h3 style="margin-top: 30px; border-top: 1px solid var(--border-color); padding-top: 20px;">Adicionar Nova Campanha</h3>
+            <div class="form-row">
+                <div class="form-field">
+                    <label for="campaign-select">Selecione a Campanha</label>
+                    <select id="campaign-select"></select>
+                </div>
+            </div>
+            <div id="campaign-details-card" class="campaign-details-card hidden"></div>
+
+            <div id="campaign-pricing-form-container" style="margin-top: 20px;"></div>
+             <div class="button-container">
+                <button type="button" id="save-campaign-price-btn" class="app-button" style="background-color: var(--secondary-color);" disabled>+ Adicionar Preço de Campanha</button>
+            </div>
+        </section>
+    </div>
+
+    <div id="app-modal" class="modal-overlay"></div>
+
+    <script src="/static/app.js"></script>
+    <script src="/static/pricingLogic.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const recordId = new URLSearchParams(window.location.search).get('id');
+            const initialLoader = document.getElementById('initial-loader');
+            const errorMessage = document.getElementById('error-message');
+
+            if (!recordId) {
+                initialLoader.classList.add('hidden');
+                errorMessage.textContent = "Erro: ID do registro não fornecido para edição.";
+                errorMessage.classList.remove('hidden');
+                return;
+            }
+
+            checkAuthStatusAndUpdateNav().then(user => {
+                if (user) {
+                    try {
+                        initializePricingForm('edit', recordId);
+                        setupLogoutButton();
+                    } catch (error) {
+                        console.error("Erro ao inicializar a página de edição:", error);
+                        const container = document.querySelector('.container');
+                        if (container) {
+                            container.innerHTML = '<h1>Ocorreu um erro ao carregar a página.</h1><p>Por favor, tente recarregar ou contate o suporte. Detalhes do erro foram registrados no console.</p>';
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>

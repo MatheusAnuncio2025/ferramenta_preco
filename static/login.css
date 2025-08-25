@@ -1,0 +1,135 @@
+:root {
+    --primary-color: #2ecc71;
+    --text-color: #333;
+    --light-grey: #f0f2f5;
+    --white-color: #ffffff;
+    --border-color: #dde1e6;
+    --transition-speed: 0.3s;
+    --subtle-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+body, html {
+    height: 100%;
+    margin: 0;
+    font-family: 'Roboto', sans-serif;
+    background-color: var(--white-color);
+}
+
+/* Animação de entrada da página */
+body {
+    animation: fadeInPage 0.5s ease-in-out;
+}
+
+@keyframes fadeInPage {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.login-container {
+    display: flex;
+    height: 100vh;
+    width: 100%;
+}
+
+.login-art-section {
+    width: 50%;
+    background-color: var(--primary-color);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+}
+
+.login-art-section svg {
+    width: 100%;
+    height: 100%;
+}
+
+.login-form-section {
+    width: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: var(--white-color);
+    padding: 40px;
+}
+
+.login-box {
+    max-width: 400px;
+    width: 100%;
+    text-align: center;
+}
+
+.login-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--text-color);
+    margin-bottom: 15px;
+}
+
+.login-subtitle {
+    font-size: 1.1rem;
+    color: #666;
+    margin-bottom: 40px;
+}
+
+.google-login-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 30px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background-color: var(--white-color);
+    color: var(--text-color);
+    font-size: 1rem;
+    font-weight: 500;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all var(--transition-speed) ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.google-login-button:hover {
+    background-color: var(--light-grey);
+    border-color: #ccc;
+    transform: translateY(-3px);
+    box-shadow: var(--subtle-shadow);
+}
+
+.google-login-button:active {
+    transform: translateY(-1px);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.google-login-button .google-icon {
+    width: 20px;
+    height: 20px;
+    margin-right: 15px;
+}
+
+.login-footer {
+    margin-top: 60px;
+    font-size: 0.9rem;
+    color: #aaa;
+}
+
+/* Design responsivo para celulares */
+@media (max-width: 768px) {
+    .login-container {
+        flex-direction: column;
+    }
+
+    .login-art-section {
+        display: none; /* Esconde a arte em telas pequenas */
+    }
+
+    .login-form-section {
+        width: 100%;
+        height: 100%;
+    }
+}
