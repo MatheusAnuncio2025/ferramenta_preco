@@ -6,7 +6,6 @@ WORKDIR /app
 
 # Copie o arquivo de dependências primeiro para aproveitar o cache do Docker
 COPY requirements.txt .
-
 # Instale as dependências
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -19,5 +18,9 @@ COPY ./static /app/static
 EXPOSE 8080
 
 # Comando para iniciar a aplicação em produção com Gunicorn
-# Aponta para o objeto 'app' dentro do arquivo 'app/main.py'
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "1", "--worker-class", "uvicorn.workers.UvicornWorker", "app.main:app"]
+# APONTOS-CHAVE DA CORREÇÃO:
+# --log-level "debug": Aumenta a verbosidade dos logs para vermos mais detalhes.
+# --access-logfile "-": Envia os logs de acesso para a saída padrão (visível no Docker).
+# --error-logfile "-": Envia os logs de erro para a saída padrão.
+# --capture-output: Captura os prints e logs da sua aplicação e os envia para o log de erro do Gunicorn.
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "1", "--worker-class", "uvicorn.workers.UvicornWorker", "--log-level", "debug", "--access-logfile", "-", "--error-logfile", "-", "--capture-output", "app.main:app"]

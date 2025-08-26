@@ -153,7 +153,7 @@ async def get_dados_para_calculo(sku: str, loja_id: str, user: dict = Depends(de
     if not produto_data: 
         produto_data = {"sku": sku}
     
-    config_loja_data = services.get_loja_details(loja_id)
+    config_loja_data = await services.get_loja_details(loja_id)
     return models.DadosCalculoResponse(
         produto=models.ProdutoDados(**produto_data), 
         config_loja=models.LojaConfigDetalhes(**config_loja_data)
@@ -210,7 +210,7 @@ async def get_data_for_edit_page(id: str, user: dict = Depends(dependencies.get_
         )
         if not loja_id: raise HTTPException(status_code=404, detail="Configuração da loja não encontrada.")
         
-        config_loja = services.get_loja_details(loja_id)
+        config_loja = await services.get_loja_details(loja_id)
 
         produto_atual_data = services.fetch_product_data(precificacao_base['sku'])
         if not produto_atual_data: produto_atual_data = {"sku": precificacao_base['sku']}

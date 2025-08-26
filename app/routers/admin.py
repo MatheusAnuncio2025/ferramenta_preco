@@ -29,6 +29,10 @@ async def add_new_user_by_admin(payload: models.NewUserPayload, admin: dict = De
     }
 
     created_user = services.create_user(new_user_row)
+    # CORREÇÃO: Adicionada verificação para o caso de a criação do usuário falhar.
+    if not created_user:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Falha ao criar o usuário e/ou recuperá-lo do banco de dados.")
+
     services.log_action(admin.get('email'), "ADMIN_ADDED_USER", {"new_user_email": target_email})
     return created_user
 

@@ -8,7 +8,11 @@ services:
       - ./.env
     volumes:
       # Monta a chave da conta de serviço para o BigQuery
-      - ./gcp-sa-key.json:/app/gcp-sa-key.json
+      # Garanta que o arquivo 'gcp-sa-key.json' exista na raiz do projeto ANTES de rodar 'docker-compose up'
+      - type: bind
+        source: ./gcp-sa-key.json
+        target: /app/gcp-sa-key.json
+        read_only: true
       # Monta a pasta do frontend para que o FastAPI possa servi-la
       - ./static:/app/static
       # Monta o diretório 'app' inteiro para refletir alterações no código Python sem reconstruir

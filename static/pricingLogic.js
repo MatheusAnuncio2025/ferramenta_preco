@@ -158,7 +158,7 @@ const PricingCalculator = {
         const calcularPlano = (plano) => {
             const planoUpper = plano.charAt(0).toUpperCase() + plano.slice(1);
             const margemDesejadaEl = elements[`margemDesejada${planoUpper}`];
-            const vendaEl = elements[`valorVenda${planoUpper}`];
+            const vendaEl = elements[`venda${planoUpper}`];
             const freteEl = elements[`frete${planoUpper}`];
             
             let valorVenda = parseFloat(vendaEl.value) || 0;

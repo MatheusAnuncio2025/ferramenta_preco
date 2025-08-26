@@ -164,6 +164,11 @@ class CampanhaML(BaseModel):
     data_inicio: Optional[date] = None
     data_fim: Optional[date] = None
 
+class AllBusinessRules(BaseModel):
+    REGRAS_TARIFA_FIXA_ML: List[RegraTarifaFixa]
+    REGRAS_FRETE_ML: List[RegraFrete]
+    CATEGORIAS_PRECIFICACAO: List[CategoriaPrecificacao]
+
 class AlertaCusto(BaseModel):
     id_precificacao: str
     sku: str

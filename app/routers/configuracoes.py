@@ -38,7 +38,7 @@ async def delete_loja(loja_id: str, user: dict = Depends(dependencies.get_curren
 @router.get("/lojas/{loja_id}/detalhes", response_model=models.LojaConfigDetalhes)
 async def get_loja_detalhes_api(loja_id: str, user: dict = Depends(dependencies.get_current_user)):
     """Recupera a configuração detalhada de uma loja específica."""
-    details = services.get_loja_details(loja_id)
+    details = await services.get_loja_details(loja_id)
     return models.LojaConfigDetalhes(**details) if details else models.LojaConfigDetalhes()
     
 @router.post("/lojas/{loja_id}/detalhes", status_code=200)
