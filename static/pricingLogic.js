@@ -442,6 +442,21 @@ class PricingFormManager {
     handleCalculation(e) {
         if (this.isCalculating) return;
         this.isCalculating = true;
+    
+        // Se o evento foi disparado pela seleção de categoria, atualiza as margens desejadas
+        if (e.target.id === 'categoria-precificacao') {
+            const selectedOption = this.elements.categoriaPrecificacao.options[this.elements.categoriaPrecificacao.selectedIndex];
+            const margemPadrao = selectedOption.value; // O value do option é a margem
+            if (margemPadrao) {
+                this.elements.margemDesejadaClassico.value = margemPadrao;
+                this.elements.margemDesejadaPremium.value = margemPadrao;
+            } else {
+                // Limpa se a opção "Padrão" for selecionada
+                this.elements.margemDesejadaClassico.value = '';
+                this.elements.margemDesejadaPremium.value = '';
+            }
+        }
+    
         try {
             // Trigger validation on related fields before calculating
             ValidationService.validateField(this.elements.custoUnitario);

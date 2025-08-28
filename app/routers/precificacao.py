@@ -150,8 +150,8 @@ async def get_categorias_precificacao(user: dict = Depends(dependencies.get_curr
 @router.get("/dados-para-calculo", response_model=models.DadosCalculoResponse)
 async def get_dados_para_calculo(sku: str, loja_id: str, user: dict = Depends(dependencies.get_current_user)):
     produto_data = services.fetch_product_data(sku)
-    if not produto_data: 
-        produto_data = {"sku": sku}
+    if not produto_data:
+        raise HTTPException(status_code=404, detail=f"Produto com SKU '{sku}' não encontrado no cadastro.")
     
     config_loja_data = await services.get_loja_details(loja_id)
     return models.DadosCalculoResponse(

@@ -168,14 +168,24 @@
                             
                             let historyHtml = '';
                             historyData.forEach(log => {
+                                // CORREÇÃO: Verifica se detalhes_alteracao existe e é uma string JSON válida antes de tentar fazer o parse.
+                                let changesObj = null;
+                                if (log.detalhes_alteracao && typeof log.detalhes_alteracao === 'string') {
+                                    try {
+                                        changesObj = JSON.parse(log.detalhes_alteracao);
+                                    } catch (e) {
+                                        console.error("Erro ao parsear detalhes_alteracao:", e);
+                                    }
+                                }
+
                                 const timestamp = new Date(log.timestamp).toLocaleString('pt-BR');
                                 const userEmail = log.user_email ? log.user_email.split('@')[0] : 'N/A';
                                 let changesHtml = '<ul class="history-changes-list">';
                                 
-                                if (log.detalhes_alteracao) {
-                                    for (const [field, change] of Object.entries(log.detalhes_alteracao)) {
-                                        const oldValue = change.old_value !== null ? change.old_value : 'vazio';
-                                        const newValue = change.new_value !== null ? change.new_value : 'vazio';
+                                if (changesObj) { // CORREÇÃO: Só itera se o objeto for válido.
+                                    for (const [field, change] of Object.entries(changesObj)) {
+                                        const oldValue = change.old_value !== null && change.old_value !== undefined ? change.old_value : 'vazio';
+                                        const newValue = change.new_value !== null && change.new_value !== undefined ? change.new_value : 'vazio';
                                         changesHtml += `<li><strong>${field}:</strong> <span class="old-value">${oldValue}</span> → <span class="new-value">${newValue}</span></li>`;
                                     }
                                 }
@@ -187,7 +197,7 @@
                                             <span class="user">${userEmail}</span>
                                             <span class="date">${timestamp}</span>
                                         </div>
-                                        ${changesHtml}
+                                        ${changesObj ? changesHtml : '<p style="font-size: 0.9rem; color: #777;">Sem detalhes de alteração.</p>'}
                                     </div>
                                 `;
                             });

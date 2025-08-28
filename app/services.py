@@ -28,7 +28,6 @@ TABLE_REGRAS_FRETE = f"{PROJECT_ID}.dados_magis.regras_frete_ml"
 TABLE_CATEGORIAS_PRECIFICACAO = f"{PROJECT_ID}.dados_magis.categorias_precificacao"
 TABLE_CAMPANHAS_ML = f"{PROJECT_ID}.dados_magis.campanhas_ml"
 TABLE_PRECIFICACOES_CAMPANHA = f"{PROJECT_ID}.dados_magis.precificacoes_campanha"
-# CORREÇÃO: Apontando para a tabela de vendas correta conforme o schema enviado
 TABLE_VENDAS = f"{PROJECT_ID}.relatorio_vendas.base_dash_relatorio_vendas"
 
 # --- Funções de Lógica de Negócio (Auxiliares) ---
@@ -302,7 +301,6 @@ def get_dashboard_alert_data() -> Dict[str, List]:
     query_custos = f"WITH LatestPricing AS (SELECT id, sku, titulo, custo_unitario, ROW_NUMBER() OVER(PARTITION BY sku ORDER BY data_calculo DESC) as rn FROM `{TABLE_PRECIFICACOES_SALVAS}`) SELECT lp.id as id_precificacao, lp.sku, lp.titulo, lp.custo_unitario as custo_precificado, p.valor_de_custo as custo_atual FROM LatestPricing lp JOIN `{TABLE_PRODUTOS}` p ON lp.sku = p.sku WHERE lp.rn = 1 AND lp.custo_unitario != p.valor_de_custo AND p.valor_de_custo IS NOT NULL LIMIT 50"
     custos = [dict(row) for row in execute_query(query_custos)]
     
-    # CORREÇÃO: Usando a nova tabela de vendas e os nomes corretos das colunas
     query_estagnados = f"""
         WITH LastSale AS (
             SELECT sku, MAX(data_do_pedido) as ultima_venda
@@ -395,3 +393,84 @@ async def run_simulation(payload: models.SimulacaoPayload) -> models.SimulacaoRe
 
     depois = calculate_totals(precificacoes_depois)
     return models.SimulacaoResultado(antes=antes, depois=depois)
+
+def process_rules_with_merge(table_id: str, rules: List[models.BaseModel], p_keys: List[str]):
+    """
+    Processa uma lista de regras usando um comando MERGE para inserir, atualizar ou deletar.
+    Esta função foi recuperada da lógica do seu arquivo de backup para restaurar a performance.
+    """
+    for rule in rules:
+        if not getattr(rule, 'id', None):
+            setattr(rule, 'id', str(uuid.uuid4()))
+
+    # Deleta regras que não estão mais na lista enviada pela UI
+    ids_to_keep = [rule.id for rule in rules if getattr(rule, 'id', None)]
+    if ids_to_keep:
+        delete_query = f"DELETE FROM `{table_id}` WHERE id NOT IN UNNEST(@ids)"
+        params = [bigquery.ArrayQueryParameter("ids", "STRING", ids_to_keep)]
+        execute_query(delete_query, params)
+    elif not rules: # Se a lista de regras está vazia, limpa a tabela
+        execute_query(f"DELETE FROM `{table_id}` WHERE true")
+        return
+
+    if not rules:
+        return
+
+    # Constrói a query MERGE
+    model_fields = rules[0].model_fields.keys()
+    
+    rows_to_insert = [rule.model_dump(mode='json') for rule in rules]
+    
+    if not rows_to_insert:
+        return
+
+    # Usa a API de streaming do BigQuery, que é eficiente para isso
+    # O BigQuery irá lidar com a lógica de MERGE se a tabela tiver chaves primárias
+    # ou podemos construir uma query MERGE explícita se necessário.
+    # Para simplicidade e eficiência, vamos assumir que a inserção direta com IDs únicos
+    # seguida de um delete (já feito acima) é suficiente e performático.
+    
+    # A maneira mais robusta é usar MERGE, então vamos construir a query
+    source_columns = ", ".join(f"`{col}`" for col in model_fields)
+    update_clause = ", ".join(f"T.`{col}` = S.`{col}`" for col in model_fields if col not in p_keys)
+    
+    # Prepara os dados para a query
+    source_selects = []
+    all_params = []
+    param_counter = 0
+
+    for rule in rules:
+        placeholders = []
+        rule_dict = rule.model_dump()
+        for key, value in rule_dict.items():
+            param_name = f"p{param_counter}"
+            placeholders.append(f"@{param_name} AS `{key}`")
+            
+            param_type = "STRING" # Padrão
+            if isinstance(value, bool): param_type = "BOOL"
+            elif isinstance(value, int): param_type = "INT64"
+            elif isinstance(value, float): param_type = "NUMERIC"
+            elif isinstance(value, date): param_type = "DATE"
+            
+            all_params.append(bigquery.ScalarQueryParameter(param_name, param_type, value))
+            param_counter += 1
+        source_selects.append(f"SELECT {', '.join(placeholders)}")
+
+    if not source_selects:
+        return
+
+    source_query_part = "\nUNION ALL\n".join(source_selects)
+    
+    merge_query = f"""
+    MERGE `{table_id}` T
+    USING ({source_query_part}) AS S ON {' AND '.join([f'T.{pk} = S.{pk}' for pk in p_keys])}
+    WHEN MATCHED THEN
+        UPDATE SET {update_clause}
+    WHEN NOT MATCHED BY TARGET THEN
+        INSERT ({source_columns}) VALUES ({source_columns})
+    """
+    
+    execute_query(merge_query, all_params)
+
+    # Limpa o cache para que a próxima leitura obtenha os dados atualizados
+    cache.clear()
