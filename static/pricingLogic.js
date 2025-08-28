@@ -472,6 +472,8 @@ class PricingFormManager {
             const lojas = await ApiService.fetchLojas();
             this.elements.lojaMarketplace.innerHTML = '<option value="">Selecione...</option>';
             lojas.forEach(loja => {
+                // *** CORREÇÃO APLICADA AQUI ***
+                // O 'value' da opção agora é o ID único (UUID), que a API precisa.
                 const option = new Option(`${loja.marketplace} - ${loja.id_loja}`, loja.id);
                 this.elements.lojaMarketplace.add(option);
             });
@@ -490,7 +492,10 @@ class PricingFormManager {
     }
 
     async handleLojaChange() {
+        // *** CORREÇÃO APLICADA AQUI ***
+        // Simplificado para ler diretamente o 'value', que agora é o ID correto.
         const lojaId = this.elements.lojaMarketplace.value;
+
         if (!lojaId) {
             this.lojaConfigAtual = {};
             comissoesCache = [];
@@ -520,7 +525,10 @@ class PricingFormManager {
 
     async fetchProductData() {
         const skuValue = this.elements.sku.value.trim();
+        // *** CORREÇÃO APLICADA AQUI ***
+        // Simplificado para ler diretamente o 'value', que agora é o ID correto.
         const lojaId = this.elements.lojaMarketplace.value;
+        
         if (!skuValue || !lojaId) return;
 
         this.elements.loader.classList.remove('hidden');
@@ -676,5 +684,4 @@ class PricingFormManager {
  */
 function initializePricingForm(mode, recordId = null) {
     const manager = new PricingFormManager(mode, recordId);
-    manager.init();
-}
+    manager.init()};
