@@ -137,7 +137,7 @@
                             try {
                                 const [lojasRes, catsRes] = await Promise.all([
                                     fetch('/api/config/lojas'),
-                                    fetch('/api/categorias-precificacao')
+                                    fetch('/api/precificacao/categorias-precificacao')
                                 ]);
                                 
                                 const lojas = await lojasRes.json();

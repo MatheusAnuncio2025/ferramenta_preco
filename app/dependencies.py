@@ -3,11 +3,14 @@ from fastapi import Request, Depends, HTTPException, status
 
 async def get_current_user(request: Request):
     """
-    Dependency function to get the current user from the session.
-    Raises HTTPException 401 if the user is not authenticated or authorized.
+    Lê o usuário da sessão e valida autorização.
+    Aceita 'authorized' ou 'autorizado' por compatibilidade.
     """
-    user = request.session.get('user')
-    if not user or not user.get('authorized'):
+    user = request.session.get('user') or {}
+    autorizado = user.get('authorized')
+    if autorizado is None:
+        autorizado = user.get('autorizado')
+    if not autorizado:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuário não autenticado ou não autorizado."
@@ -16,20 +19,19 @@ async def get_current_user(request: Request):
 
 async def get_current_admin_user(user: dict = Depends(get_current_user)):
     """
-    Dependency function to ensure the current user has an 'admin' role.
-    Raises HTTPException 403 if the user is not an admin.
+    Restringe a administradores. Aceita 'role' ou 'funcao'.
     """
-    if user.get('role') != 'admin':
+    role = user.get('role') or user.get('funcao') or 'usuario'
+    if role != 'admin':
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, 
+            status_code=status.HTTP_403_FORBIDDEN,
             detail="Acesso restrito a administradores."
         )
     return user
 
 async def get_historico_viewer_user(user: dict = Depends(get_current_user)):
     """
-    Dependency function to ensure the user has permission to view history.
-    Raises HTTPException 403 if the user lacks permission.
+    Garante permissão para visualizar o histórico.
     """
     if not user.get('pode_ver_historico'):
         raise HTTPException(

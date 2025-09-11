@@ -1,17 +1,14 @@
-# app/routers/auth.py
 from fastapi import APIRouter, Request, HTTPException, status
 from fastapi.responses import RedirectResponse
 from authlib.integrations.starlette_client import OAuth
 from starlette.config import Config
+import traceback
 from .. import services
 
-router = APIRouter(
-    tags=["Autenticação"]
-)
+router = APIRouter(tags=["Autenticação"])
 
-config = Config() 
+config = Config()
 oauth = OAuth(config)
-
 oauth.register(
     name='google',
     client_id=services.os.environ.get("GOOGLE_CLIENT_ID"),
@@ -37,25 +34,28 @@ async def auth(request: Request):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="E-mail não retornado pelo Google.")
 
         user_db_data = services.get_user_by_email(user_email)
-        
+
         if action == 'login':
             if not user_db_data:
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Usuário não cadastrado. Use o botão 'Cadastrar-se'.")
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Usuário não cadastrado. Use 'Cadastrar-se'.")
             services.update_user_properties(user_email, {"ultimo_login": services.datetime.utcnow().isoformat()})
-        
         elif action == 'register':
             if user_db_data:
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Este e-mail já está cadastrado. Use o botão 'Entrar'.")
-            
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Este e-mail já está cadastrado. Use 'Entrar'.")
             new_user_row = {
-                "email": user_email, "nome": user_info.get('name'), "foto_url": user_info.get('picture'),
-                "autorizado": False, "funcao": "usuario", "telefone": None, "departamento": None,
-                "data_cadastro": services.datetime.utcnow().isoformat(), "ultimo_login": services.datetime.utcnow().isoformat(),
+                "email": user_email,
+                "nome": user_info.get('name'),
+                "foto_url": user_info.get('picture'),
+                "autorizado": False,
+                "funcao": "usuario",
+                "telefone": None,
+                "departamento": None,
+                "data_cadastro": services.datetime.utcnow().isoformat(),
+                "ultimo_login": services.datetime.utcnow().isoformat(),
                 "pode_ver_historico": False
             }
             user_db_data = services.create_user(new_user_row)
             services.log_action(user_email, "NEW_USER_REGISTERED", {"source": "google_register"})
-        
         else:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Ação desconhecida.")
 
@@ -63,22 +63,22 @@ async def auth(request: Request):
             request.session['user'] = {'email': user_email, 'authorized': False}
             return RedirectResponse(url='/pendente', status_code=303)
 
-        # Atualiza os dados do usuário no banco de dados para garantir que estão corretos
         user_db_data_updated = services.get_user_by_email(user_email)
-
         request.session['user'] = {
-            'name': user_db_data_updated.get('nome'), 'email': user_email,
-            'picture': user_db_data_updated.get('foto_url'), 'role': user_db_data_updated.get('funcao'),
-            'authorized': True, 'pode_ver_historico': user_db_data_updated.get('pode_ver_historico', False)
+            'name': user_db_data_updated.get('nome'),
+            'email': user_email,
+            'picture': user_db_data_updated.get('foto_url'),
+            'role': user_db_data_updated.get('funcao'),
+            'authorized': True,
+            'pode_ver_historico': user_db_data_updated.get('pode_ver_historico', False),
         }
         services.log_action(user_email, "LOGIN_SUCCESS", {"action": action})
         return RedirectResponse(url='/calculadora', status_code=303)
-        
     except Exception as e:
-        services.traceback.print_exc()
+        traceback.print_exc()
         services.log_action("unknown", "AUTH_CALLBACK_FAILED", {"error": str(e)})
         request.session.pop('user', None)
-        error_message = getattr(e, 'detail', 'Ocorreu um erro inesperado.')
+        error_message = getattr(e, 'detail', 'Ocorreu um erro ao autenticar. Tente novamente.')
         return RedirectResponse(url=f'/?error={error_message}', status_code=303)
 
 @router.get('/logout')

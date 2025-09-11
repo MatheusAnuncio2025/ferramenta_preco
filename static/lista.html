@@ -157,7 +157,36 @@
                         const hideListMessage = () => { /* ...código existente... */ };
                         const renderPagination = (totalItems) => { /* ...código existente... */ };
                         const renderProducts = (products, totalItems) => { /* ...código existente... */ };
-                        const fetchAndRenderProducts = async () => { /* ...código existente... */ };
+                        
+                        const fetchAndRenderProducts = async () => {
+                            showListMessage('Buscando precificações...', true);
+                            
+                            const params = new URLSearchParams({
+                                page: currentPage,
+                                page_size: pageSize,
+                                sku: document.getElementById('skuFilter').value,
+                                titulo: document.getElementById('tituloFilter').value,
+                                plano: document.getElementById('planFilter').value,
+                                categoria: document.getElementById('categoryFilter').value
+                            });
+
+                            const lojaValue = document.getElementById('lojaFilter').value;
+                            if (lojaValue) {
+                                const [marketplace, id_loja] = lojaValue.split('|');
+                                params.append('marketplace', marketplace);
+                                params.append('id_loja', id_loja);
+                            }
+
+                            try {
+                                // CORREÇÃO: O endpoint correto, conforme o router atualizado, é /api/precificacao
+                                const response = await fetch(`/api/precificacao?${params.toString()}`);
+                                const data = await response.json();
+                                if (!response.ok) throw new Error(data.detail || 'Erro ao buscar dados.');
+                                renderProducts(data.items, data.total_items);
+                            } catch (error) {
+                                showListMessage(`Erro: ${error.message}`);
+                            }
+                        };
                         
                         // LÓGICA PARA O MODAL DE EDIÇÃO EM MASSA
                         bulkEditBtn.addEventListener('click', () => {
@@ -223,6 +252,7 @@
                                             button.disabled = true;
 
                                             try {
+                                                // CORREÇÃO: Endpoint correto para bulk-update
                                                 const response = await fetch('/api/precificacao/bulk-update', {
                                                     method: 'POST',
                                                     headers: { 'Content-Type': 'application/json' },

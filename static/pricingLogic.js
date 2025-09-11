@@ -77,7 +77,7 @@ const ApiService = {
     async fetchInitialData() {
         const [regrasRes, categoriasRes] = await Promise.all([
             fetch('/api/regras-negocio'),
-            fetch('/api/categorias-precificacao')
+            fetch('/api/precificacao/categorias-precificacao')
         ]);
         if (!regrasRes.ok) throw new Error("Falha ao carregar regras de negócio.");
         if (!categoriasRes.ok) throw new Error("Falha ao carregar categorias de precificação.");
@@ -97,12 +97,12 @@ const ApiService = {
         return response.json();
     },
     async fetchProductData(sku, lojaId) {
-        const response = await fetch(`/api/dados-para-calculo?sku=${encodeURIComponent(sku)}&loja_id=${encodeURIComponent(lojaId)}`);
+        const response = await fetch(`/api/precificacao/dados-para-calculo?sku=${encodeURIComponent(sku)}&loja_id=${encodeURIComponent(lojaId)}`);
         if (!response.ok) throw new Error((await response.json()).detail || 'SKU não encontrado.');
         return response.json();
     },
     async fetchEditData(recordId) {
-        const response = await fetch(`/api/precificacao/edit-data/${recordId}`);
+        const response = await fetch(`/api/precificacao/${recordId}/edit-data`);
         if (!response.ok) {
             const err = await response.json();
             throw new Error(err.detail || `Erro ${response.status}: ${response.statusText}`);
@@ -110,7 +110,7 @@ const ApiService = {
         return response.json();
     },
     async savePricing(payload, mode, recordId) {
-        const url = mode === 'edit' ? `/api/precificacao/atualizar/${recordId}` : '/api/precificacao/salvar';
+        const url = mode === 'edit' ? `/api/precificacao/${recordId}` : '/api/precificacao';
         const method = mode === 'edit' ? 'PUT' : 'POST';
         const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         if (!response.ok) throw new Error((await response.json()).detail || 'Erro ao salvar.');
@@ -398,7 +398,11 @@ class PricingFormManager {
         };
         ids.forEach(id => {
             const key = camelCaseMap[id] || id;
-            this.elements[key] = document.getElementById(id);
+            const element = document.getElementById(id);
+            if (!element) {
+                console.warn(`[cacheElements] Elemento com ID '${id}' não foi encontrado no DOM.`);
+            }
+            this.elements[key] = element;
         });
     }
 
@@ -418,7 +422,7 @@ class PricingFormManager {
         });
         
         // Event listeners for specific UI interactions
-        if (this.mode === 'new') {
+        if (this.mode === 'new' && this.elements.lojaMarketplace && this.elements.sku) {
             this.elements.lojaMarketplace.addEventListener('change', () => this.handleLojaChange());
             this.elements.sku.addEventListener('keyup', (e) => {
                 clearTimeout(this.debounceTimer);
@@ -426,8 +430,8 @@ class PricingFormManager {
             });
         }
 
-        this.elements.saveButton.addEventListener('click', () => this.handleSave());
-        this.elements.custoUnitario.addEventListener('input', () => this.checkCustoDivergence());
+        if(this.elements.saveButton) this.elements.saveButton.addEventListener('click', () => this.handleSave());
+        if(this.elements.custoUnitario) this.elements.custoUnitario.addEventListener('input', () => this.checkCustoDivergence());
         
         // Add validation listeners
         Object.keys(ValidationService.rules).forEach(id => {
@@ -472,8 +476,6 @@ class PricingFormManager {
             const lojas = await ApiService.fetchLojas();
             this.elements.lojaMarketplace.innerHTML = '<option value="">Selecione...</option>';
             lojas.forEach(loja => {
-                // *** CORREÇÃO APLICADA AQUI ***
-                // O 'value' da opção agora é o ID único (UUID), que a API precisa.
                 const option = new Option(`${loja.marketplace} - ${loja.id_loja}`, loja.id);
                 this.elements.lojaMarketplace.add(option);
             });
@@ -492,8 +494,6 @@ class PricingFormManager {
     }
 
     async handleLojaChange() {
-        // *** CORREÇÃO APLICADA AQUI ***
-        // Simplificado para ler diretamente o 'value', que agora é o ID correto.
         const lojaId = this.elements.lojaMarketplace.value;
 
         if (!lojaId) {
@@ -525,11 +525,14 @@ class PricingFormManager {
 
     async fetchProductData() {
         const skuValue = this.elements.sku.value.trim();
-        // *** CORREÇÃO APLICADA AQUI ***
-        // Simplificado para ler diretamente o 'value', que agora é o ID correto.
         const lojaId = this.elements.lojaMarketplace.value;
         
         if (!skuValue || !lojaId) return;
+
+        if (!this.elements.loader || !this.elements.searchStatus) {
+            console.error("Elementos da UI para status da busca não encontrados. O cache pode ter falhado.");
+            return;
+        }
 
         this.elements.loader.classList.remove('hidden');
         this.elements.searchStatus.textContent = 'Buscando...';
@@ -565,11 +568,11 @@ class PricingFormManager {
     checkCustoDivergence() {
         const custoInformado = parseFloat(this.elements.custoUnitario.value) || 0;
         if (this.custoFornecedorAtual > 0 && Math.abs(custoInformado - this.custoFornecedorAtual) > 0.001) {
-            this.elements.custoWarning.textContent = `Custo diverge do cadastro (${formatCurrency(this.custoFornecedorAtual)})`;
-            this.elements.custoUnitario.classList.add('cost-mismatch');
+            if(this.elements.custoWarning) this.elements.custoWarning.textContent = `Custo diverge do cadastro (${formatCurrency(this.custoFornecedorAtual)})`;
+            if(this.elements.custoUnitario) this.elements.custoUnitario.classList.add('cost-mismatch');
         } else {
-            this.elements.custoWarning.textContent = '';
-            this.elements.custoUnitario.classList.remove('cost-mismatch');
+            if(this.elements.custoWarning) this.elements.custoWarning.textContent = '';
+            if(this.elements.custoUnitario) this.elements.custoUnitario.classList.remove('cost-mismatch');
         }
     }
 
