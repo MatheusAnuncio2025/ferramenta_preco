@@ -1,58 +1,206 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from typing import List, Optional
-from .. import models, services, dependencies
+# app/routers/admin.py
+from __future__ import annotations
 
-router = APIRouter(
-    prefix="/api/admin",
-    tags=["Admin"]
-)
+import os
+import platform
+import sys
+from typing import Any, Dict, List, Optional
 
-@router.get("/usuarios", response_model=List[models.UserProfile])
-async def list_all_users(user: dict = Depends(dependencies.get_current_admin_user)):
-    return services.get_all_users()
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 
-@router.post("/usuarios", response_model=models.UserProfile, status_code=201)
-async def add_new_user_by_admin(payload: models.NewUserPayload, admin: dict = Depends(dependencies.get_current_admin_user)):
-    target_email = payload.email
-    if services.get_user_by_email(target_email):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Usuário com email {target_email} já existe.")
-    new_user_row = {
-        "email": target_email,
-        "nome": payload.nome,
-        "foto_url": f"https://ui-avatars.com/api/?name={payload.nome.replace(' ', '+')}&background=random",
-        "autorizado": payload.autorizado,
-        "funcao": payload.funcao,
-        "data_cadastro": services.datetime.utcnow().isoformat(),
-        "pode_ver_historico": False
+from .. import dependencies
+
+router = APIRouter(prefix="/api/admin", tags=["Admin"])
+
+
+# =============================================================================
+# Helpers (services + fallbacks)
+# =============================================================================
+def _services():
+    try:
+        from app import services  # type: ignore
+        return services
+    except Exception:
+        return None
+
+
+def _safe(fn_name: str, *args, **kwargs):
+    s = _services()
+    if not s:
+        return None
+    fn = getattr(s, fn_name, None)
+    if not callable(fn):
+        return None
+    try:
+        return fn(*args, **kwargs)
+    except Exception:
+        return None
+
+
+def _norm_bool(v: Any, default: bool = False) -> bool:
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, (int, float)):
+        return bool(v)
+    if isinstance(v, str):
+        return v.strip().lower() in {"1", "true", "t", "yes", "y", "sim"}
+    return default
+
+
+def _norm_user(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Normaliza para o shape esperado pela UI de Admin."""
+    email = str(row.get("email") or row.get("username") or "").lower()
+    name = row.get("name") or row.get("display_name") or email.split("@")[0] if email else ""
+    picture = row.get("picture") or row.get("avatar") or None
+    autorizado = _norm_bool(row.get("autorizado") or row.get("authorized") or row.get("is_authorized"), False)
+    is_admin = _norm_bool(row.get("is_admin") or row.get("admin"), False)
+    roles = row.get("roles")
+    if not isinstance(roles, list):
+        roles = ["admin"] if is_admin else ["user"]
+    last_login = row.get("last_login") or row.get("last_seen") or None
+
+    return {
+        "email": email,
+        "name": name,
+        "picture": picture,
+        "autorizado": autorizado,
+        "authorized": autorizado,  # compat
+        "is_admin": is_admin,
+        "roles": roles,
+        "last_login": last_login,
     }
-    created_user = services.create_user(new_user_row)
-    if not created_user:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Falha ao criar o usuário.")
-    services.log_action(admin.get('email'), "ADMIN_ADDED_USER", {"new_user_email": target_email})
-    return created_user
 
-@router.post("/usuarios/{target_email}/acao", status_code=200)
-async def manage_user(target_email: str, acao: str, valor: Optional[str] = None, admin: dict = Depends(dependencies.get_current_admin_user)):
-    if admin.get('email') == target_email:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Administradores não podem alterar a própria função/status.")
-    updates = {}
-    if acao == 'funcao' and valor in ['admin', 'usuario']:
-        updates['funcao'] = valor
-    elif acao == 'autorizar' and valor in ['true', 'false']:
-        updates['autorizado'] = (valor == 'true')
-    elif acao == 'pode_ver_historico' and valor in ['true', 'false']:
-        updates['pode_ver_historico'] = (valor == 'true')
-    else:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Ação ou valor inválido.")
-    services.update_user_properties(target_email, updates)
-    services.log_action(admin.get('email'), "ADMIN_MANAGED_USER", {"target": target_email, "action": acao, "value": valor})
-    return {"message": "Usuário atualizado com sucesso."}
 
-@router.delete("/usuarios/{target_email}", status_code=204)
-async def delete_user(target_email: str, admin: dict = Depends(dependencies.get_current_admin_user)):
-    if admin.get('email') == target_email:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Administradores não podem se auto-excluir.")
-    if not services.get_user_by_email(target_email):
-        raise HTTPException(status_code=404, detail="Usuário não encontrado.")
-    services.delete_user_by_email(target_email)
-    services.log_action(admin.get('email'), "ADMIN_DELETED_USER", {"target": target_email})
+# =============================================================================
+# Models (request/response)
+# =============================================================================
+class AdminUserItem(BaseModel):
+    email: str
+    name: Optional[str] = None
+    picture: Optional[str] = None
+    autorizado: bool = False
+    authorized: bool = False
+    is_admin: bool = False
+    roles: List[str] = Field(default_factory=lambda: ["user"])
+    last_login: Optional[str] = None
+
+
+class AdminUsersResponse(BaseModel):
+    users: List[AdminUserItem] = Field(default_factory=list)
+
+
+class AuthorizeUserPayload(BaseModel):
+    email: str
+    autorizado: bool
+
+
+class SetRolePayload(BaseModel):
+    email: str
+    is_admin: bool
+
+
+class LogEntry(BaseModel):
+    ts: Optional[str] = None
+    level: Optional[str] = None
+    message: Optional[str] = None
+    meta: Optional[Dict[str, Any]] = None
+
+
+class LogsResponse(BaseModel):
+    items: List[LogEntry] = Field(default_factory=list)
+
+
+class HealthResponse(BaseModel):
+    status: str = "ok"
+    python: str = Field(default_factory=lambda: sys.version.split()[0])
+    platform: str = Field(default_factory=platform.platform)
+    app_version: Optional[str] = os.getenv("APP_VERSION")
+    env: Optional[str] = os.getenv("APP_ENV")
+
+
+# =============================================================================
+# Endpoints (somente ADMIN)
+# =============================================================================
+@router.get("/usuarios", response_model=AdminUsersResponse, summary="Lista de usuários")
+async def list_users(user: dict = Depends(dependencies.get_current_admin_user)) -> AdminUsersResponse:
+    """
+    Lista usuários. Integra com:
+      - services.list_users()   -> [ { email, name, authorized/autorizado, is_admin, roles, picture, last_login } ]
+      - services.get_all_users() (fallback)
+    Nunca retorna 500; devolve lista vazia no pior caso.
+    """
+    rows = []
+    for fn in ("list_users", "get_all_users"):
+        res = _safe(fn)
+        if isinstance(res, list):
+            rows = res
+            break
+
+    users = []
+    for r in rows or []:
+        if isinstance(r, dict):
+            users.append(AdminUserItem(**_norm_user(r)))
+    return AdminUsersResponse(users=users)
+
+
+@router.post("/usuarios/authorize", summary="Autoriza/Desautoriza usuário")
+async def authorize_user(payload: AuthorizeUserPayload, user: dict = Depends(dependencies.get_current_admin_user)):
+    """
+    Define flag de autorização de um usuário.
+    Integra com services.set_user_authorized(email, autorizado: bool)
+    """
+    email = (payload.email or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="E-mail inválido.")
+
+    ok = _safe("set_user_authorized", email, bool(payload.autorizado))
+    if ok is False:
+        raise HTTPException(status_code=400, detail="Falha ao atualizar autorização do usuário.")
+    return {"ok": True}
+
+
+@router.post("/usuarios/role", summary="Promove/Rebaixa admin")
+async def set_user_role(payload: SetRolePayload, user: dict = Depends(dependencies.get_current_admin_user)):
+    """
+    Promove/Rebaixa privilégios de admin.
+    Integra com services.set_admin(email, is_admin: bool)
+    """
+    email = (payload.email or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="E-mail inválido.")
+
+    ok = _safe("set_admin", email, bool(payload.is_admin))
+    if ok is False:
+        raise HTTPException(status_code=400, detail="Falha ao atualizar papel do usuário.")
+    return {"ok": True}
+
+
+@router.get("/logs", response_model=LogsResponse, summary="Últimos logs")
+async def get_logs(limit: int = 200, user: dict = Depends(dependencies.get_current_admin_user)) -> LogsResponse:
+    """
+    Retorna últimos logs (se o backend expuser). Fallback para vazio.
+    Integra com services.get_recent_logs(limit) -> [ { ts, level, message, meta } ]
+    """
+    rows = _safe("get_recent_logs", int(limit)) or []
+    items: List[LogEntry] = []
+    if isinstance(rows, list):
+        for r in rows:
+            if isinstance(r, dict):
+                items.append(
+                    LogEntry(
+                        ts=r.get("ts") or r.get("timestamp"),
+                        level=r.get("level") or r.get("lvl"),
+                        message=r.get("message") or r.get("msg"),
+                        meta=r.get("meta") if isinstance(r.get("meta"), dict) else None,
+                    )
+                )
+    return LogsResponse(items=items)
+
+
+@router.get("/health", response_model=HealthResponse, summary="Healthcheck")
+async def health(user: dict = Depends(dependencies.get_current_admin_user)) -> HealthResponse:
+    """
+    Health simples da aplicação (somente admin na API para evitar exposição).
+    """
+    return HealthResponse()
