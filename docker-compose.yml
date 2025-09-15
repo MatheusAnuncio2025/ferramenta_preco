@@ -4,17 +4,23 @@ services:
     ports:
       - "8080:8080"
     env_file:
-      - ./.env    # mantenha este arquivo na raiz
+      - ./.env
+    environment:
+      # se usar BigQuery localmente:
+      GOOGLE_APPLICATION_CREDENTIALS: /app/gcp-sa-key.json
+      PORT: 8080
     volumes:
-      # chave GCP (opcional em dev; obrigatório se usar BigQuery localmente)
+      # chaves GCP (opcional em dev; obrigatório se BigQuery estiver ativado)
       - type: bind
         source: ./gcp-sa-key.json
         target: /app/gcp-sa-key.json
         read_only: true
-      # hot-reload de código (dev)
+      # hot-reload
       - ./static:/app/static
       - ./app:/app/app
-    environment:
-      GOOGLE_APPLICATION_CREDENTIALS: /app/gcp-sa-key.json
-      PORT: 8080
     restart: always
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
