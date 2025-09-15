@@ -1,11 +1,14 @@
 from fastapi import FastAPI, Request, HTTPException, Depends
-from fastapi.responses import FileResponse, RedirectResponse, HTMLResponse
+from fastapi.responses import FileResponse, RedirectResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.exception_handlers import http_exception_handler
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
-import os
 from pathlib import Path
+import os
+from functools import lru_cache
 
+# ==== Routers e dependencies (mantidos do seu projeto) ====
 from .routers import (
     admin,
     auth,
@@ -23,6 +26,7 @@ from .dependencies import (
     get_historico_viewer_user,
 )
 
+# ==== App ====
 app = FastAPI(
     title="Ferramenta de Precificação",
     description="API para a ferramenta de precificação de produtos.",
@@ -43,8 +47,44 @@ app.add_middleware(
     https_only=bool(os.environ.get("SESSIONS_HTTPS_ONLY", "")),
 )
 
+# ==== CORS (liberado em dev; restrinja em produção) ====
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS if ALLOWED_ORIGINS != ["*"] else ["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_credentials=True,
+)
+
 # ==== Arquivos estáticos ====
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+# ==== BigQuery: cliente e diagnóstico ====
+GCP_PROJECT = os.getenv("GCP_PROJECT")
+BIGQUERY_DATASET = os.getenv("BIGQUERY_DATASET")
+GOOGLE_APPLICATION_CREDENTIALS = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+
+@lru_cache(maxsize=1)
+def get_bq_client():
+    """
+    Retorna um cliente BigQuery ou lança HTTPException com mensagem clara.
+    """
+    if not GOOGLE_APPLICATION_CREDENTIALS or not os.path.isfile(GOOGLE_APPLICATION_CREDENTIALS):
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Credencial GCP ausente/inválida. "
+                "Defina GOOGLE_APPLICATION_CREDENTIALS e monte o arquivo no contêiner."
+            ),
+        )
+    if not GCP_PROJECT:
+        raise HTTPException(status_code=500, detail="GCP_PROJECT não definido no ambiente.")
+    try:
+        from google.cloud import bigquery
+        return bigquery.Client(project=GCP_PROJECT)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Falha ao inicializar BigQuery: {e!r}")
 
 # ==== Rotas (APIs) ====
 app.include_router(auth.router)
@@ -57,7 +97,7 @@ app.include_router(precificacao.router)
 app.include_router(regras.router)
 app.include_router(simulador.router)
 
-# ==== Tratamento centralizado de HTTPException ====
+# ==== Tratamento centralizado de HTTPException (mantido) ====
 @app.exception_handler(HTTPException)
 async def custom_http_exception_handler(request: Request, exc: HTTPException):
     detail = exc.detail if isinstance(exc.detail, str) else "Ocorreu um erro."
@@ -74,7 +114,7 @@ async def custom_http_exception_handler(request: Request, exc: HTTPException):
         return RedirectResponse(url=f"/?error={detail}", status_code=303)
     return await http_exception_handler(request, exc)
 
-# ==== Páginas (HTML) ====
+# ==== Páginas (HTML) — mantidas ====
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
 async def serve_root_or_login():
     return FileResponse(str(STATIC_DIR / "login.html"))
@@ -132,3 +172,21 @@ async def serve_edit_campaign_page(user: dict = Depends(get_current_user)):
 @app.get("/simulador", response_class=HTMLResponse, include_in_schema=False)
 async def serve_simulator_page(user: dict = Depends(get_current_user)):
     return FileResponse(str(STATIC_DIR / "simulador.html"))
+
+# ==== Health & Diagnóstico ====
+@app.get("/healthz", include_in_schema=False)
+def healthz():
+    return {"ok": True, "env": os.getenv("ENV", "local")}
+
+@app.get("/diag/bq", include_in_schema=False)
+def diag_bq():
+    """
+    Teste rápido do BigQuery: roda SELECT 1.
+    Requer GOOGLE_APPLICATION_CREDENTIALS e GCP_PROJECT válidos.
+    """
+    client = get_bq_client()
+    try:
+        result = list(client.query("SELECT 1 AS ok").result())
+        return {"bq": "ok", "rows": len(result), "sample": [dict(r) for r in result]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro consultando BQ: {e!r}")
