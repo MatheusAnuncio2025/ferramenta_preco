@@ -1,95 +1,280 @@
-from fastapi import APIRouter, Request, HTTPException, status
-from fastapi.responses import RedirectResponse
-from authlib.integrations.starlette_client import OAuth
-from starlette.config import Config
-import traceback
-from .. import services
+# app/routers/auth.py
+from __future__ import annotations
 
-router = APIRouter(tags=["Autenticação"])
+import os
+import time
+from typing import Any, Dict, Optional, List
+from urllib.parse import urlencode
 
-config = Config()
-oauth = OAuth(config)
-oauth.register(
-    name='google',
-    client_id=services.os.environ.get("GOOGLE_CLIENT_ID"),
-    client_secret=services.os.environ.get("GOOGLE_CLIENT_SECRET"),
-    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
-    client_kwargs={'scope': 'openid email profile'},
-)
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse, RedirectResponse
+from pydantic import BaseModel, Field
 
-@router.get('/login')
-async def login(request: Request, action: str = 'login'):
-    redirect_uri = request.url_for('auth')
-    request.session['auth_action'] = action
-    return await oauth.google.authorize_redirect(request, str(redirect_uri), prompt='select_account')
+from .. import dependencies
 
-@router.get('/auth')
-async def auth(request: Request):
+router = APIRouter(tags=["Auth"])
+
+# =============================================================================
+# Config / Constantes
+# =============================================================================
+GOOGLE_AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
+GOOGLE_TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
+GOOGLE_USERINFO_ENDPOINT = "https://www.googleapis.com/oauth2/v3/userinfo"
+
+# Leitura de ENV com defaults seguros
+CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "") or os.getenv("OAUTH_REDIRECT_URI", "")
+DEFAULT_SUCCESS_REDIRECT = os.getenv("LOGIN_SUCCESS_REDIRECT", "/calculadora")
+
+# Domínios permitidos (CSV) para conceder "autorizado" por domínio
+ALLOWED_DOMAINS = [d.strip().lower() for d in os.getenv("AUTH_ALLOWED_DOMAINS", "").split(",") if d.strip()]
+# Lista de e-mails admin (CSV)
+ADMIN_EMAILS = {e.strip().lower() for e in os.getenv("ADMIN_EMAILS", "").split(",") if e.strip()}
+
+
+# =============================================================================
+# Helpers
+# =============================================================================
+def _services():
     try:
-        action = request.session.pop('auth_action', 'login')
-        token = await oauth.google.authorize_access_token(request)
-        user_info = token.get('userinfo')
-        user_email = user_info.get('email')
-        if not user_email:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="E-mail não retornado pelo Google.")
+        from app import services  # type: ignore
+        return services
+    except Exception:
+        return None
 
-        user_db_data = services.get_user_by_email(user_email)
 
-        if action == 'login':
-            if not user_db_data:
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Usuário não cadastrado. Use 'Cadastrar-se'.")
-            services.update_user_properties(user_email, {"ultimo_login": services.datetime.utcnow().isoformat()})
-        elif action == 'register':
-            if user_db_data:
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Este e-mail já está cadastrado. Use 'Entrar'.")
-            new_user_row = {
-                "email": user_email,
-                "nome": user_info.get('name'),
-                "foto_url": user_info.get('picture'),
-                "autorizado": False,
-                "funcao": "usuario",
-                "telefone": None,
-                "departamento": None,
-                "data_cadastro": services.datetime.utcnow().isoformat(),
-                "ultimo_login": services.datetime.utcnow().isoformat(),
-                "pode_ver_historico": False
-            }
-            user_db_data = services.create_user(new_user_row)
-            services.log_action(user_email, "NEW_USER_REGISTERED", {"source": "google_register"})
-        else:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Ação desconhecida.")
+def _is_admin(email: str) -> bool:
+    s = _services()
+    email_l = (email or "").strip().lower()
+    if not email_l:
+        return False
+    # prioridade: services
+    try:
+        if s and hasattr(s, "is_admin"):
+            ret = s.is_admin(email_l)
+            if isinstance(ret, bool):
+                return ret
+    except Exception:
+        pass
+    # fallback: ADMIN_EMAILS
+    return email_l in ADMIN_EMAILS
 
-        if not user_db_data or not user_db_data.get('autorizado'):
-            request.session['user'] = {'email': user_email, 'authorized': False}
-            return RedirectResponse(url='/pendente', status_code=303)
 
-        user_db_data_updated = services.get_user_by_email(user_email)
-        request.session['user'] = {
-            'name': user_db_data_updated.get('nome'),
-            'email': user_email,
-            'picture': user_db_data_updated.get('foto_url'),
-            'role': user_db_data_updated.get('funcao'),
-            'authorized': True,
-            'pode_ver_historico': user_db_data_updated.get('pode_ver_historico', False),
-        }
-        services.log_action(user_email, "LOGIN_SUCCESS", {"action": action})
-        return RedirectResponse(url='/calculadora', status_code=303)
-    except Exception as e:
-        traceback.print_exc()
-        services.log_action("unknown", "AUTH_CALLBACK_FAILED", {"error": str(e)})
-        request.session.pop('user', None)
-        error_message = getattr(e, 'detail', 'Ocorreu um erro ao autenticar. Tente novamente.')
-        return RedirectResponse(url=f'/?error={error_message}', status_code=303)
+def _is_authorized(email: str) -> bool:
+    s = _services()
+    email_l = (email or "").strip().lower()
+    if not email_l:
+        return False
+    # prioridade: services
+    try:
+        if s and hasattr(s, "is_user_authorized"):
+            ret = s.is_user_authorized(email_l)
+            if isinstance(ret, bool):
+                return ret
+    except Exception:
+        pass
+    # fallback: domínio permitido
+    if ALLOWED_DOMAINS:
+        domain = email_l.split("@")[-1]
+        if domain in ALLOWED_DOMAINS:
+            return True
+    # admins sempre autorizados
+    if _is_admin(email_l):
+        return True
+    return False
 
-@router.get('/logout')
-async def logout(request: Request):
-    user_email = request.session.get('user', {}).get('email')
-    if user_email:
-        services.log_action(user_email, "LOGOUT")
-    request.session.pop('user', None)
-    return RedirectResponse(url='/', status_code=303)
 
-@router.get("/api/auth/status")
-async def auth_status(request: Request):
+def _enrich_user(email: str, base_profile: Dict[str, Any]) -> Dict[str, Any]:
+    """Usa services.get_user_profile(email) (se existir) para enriquecer name/picture."""
+    s = _services()
+    enriched = dict(base_profile)
+    try:
+        if s and hasattr(s, "get_user_profile"):
+            prof = s.get_user_profile(email) or {}
+            if isinstance(prof, dict):
+                enriched["name"] = prof.get("name") or enriched.get("name")
+                enriched["picture"] = prof.get("picture") or enriched.get("picture")
+                roles = prof.get("roles")
+                if isinstance(roles, list):
+                    enriched["roles"] = roles
+    except Exception:
+        pass
+    return enriched
+
+
+def _require_oauth_config():
+    if not CLIENT_ID or not CLIENT_SECRET or not REDIRECT_URI:
+        raise HTTPException(
+            status_code=500,
+            detail="Configuração OAuth incompleta (GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI).",
+        )
+
+
+def _session_user_from_google_info(info: Dict[str, Any]) -> Dict[str, Any]:
+    email = info.get("email", "")
+    name = info.get("name") or info.get("given_name") or email.split("@")[0]
+    picture = info.get("picture")
+    profile = {"email": email, "name": name, "picture": picture}
+
+    # enriquecer / decidir flags
+    profile = _enrich_user(email, profile)
+    profile["is_admin"] = _is_admin(email)
+    profile["autorizado"] = _is_authorized(email)
+    profile["authorized"] = profile["autorizado"]  # compat
+    if "roles" not in profile:
+        profile["roles"] = ["admin"] if profile["is_admin"] else ["user"]
+    return profile
+
+
+# =============================================================================
+# Modelos de resposta
+# =============================================================================
+class AuthStatus(BaseModel):
+    authenticated: bool = False
+    user: Optional[Dict[str, Any]] = None
+    ts: int = Field(default_factory=lambda: int(time.time()))
+
+
+# =============================================================================
+# Endpoints usados pelo Front
+# =============================================================================
+@router.get("/api/auth/status", response_model=AuthStatus)
+async def auth_status(request: Request) -> AuthStatus:
+    """
+    Retorna estado de autenticação + dados do usuário (se autenticado).
+    Compatível com app.js (isAuthorized/autorizado).
+    """
     user = request.session.get("user")
-    return {"authenticated": True, **user} if user and user.get("authorized") else {"authenticated": False}
+    if not user:
+        return AuthStatus(authenticated=False, user=None)
+    # garante as chaves padronizadas
+    user["autorizado"] = bool(user.get("autorizado") or user.get("authorized") or False)
+    user["authorized"] = user["autorizado"]
+    user["is_admin"] = bool(user.get("is_admin", False))
+    if "roles" not in user:
+        user["roles"] = ["admin"] if user["is_admin"] else ["user"]
+    return AuthStatus(authenticated=True, user=user)
+
+
+@router.post("/api/auth/logout")
+async def auth_logout(request: Request):
+    """
+    Faz logout destruindo a sessão atual.
+    """
+    request.session.clear()
+    # Front trata qualquer saída 200 como sucesso
+    return {"ok": True}
+
+
+# =============================================================================
+# Fluxo OAuth (Google)
+# =============================================================================
+@router.get("/login")
+async def login(request: Request, action: Optional[str] = None):
+    """
+    Inicia o fluxo OAuth se action=login; caso contrário, entrega a página / (login.html é servido pelo Main).
+    """
+    if action != "login":
+        # Deixe o main servir a página raiz.
+        return RedirectResponse(url="/")
+
+    _require_oauth_config()
+
+    # CSRF 'state'
+    state = os.urandom(12).hex()
+    request.session["oauth_state"] = state
+    request.session["post_login_redirect"] = request.query_params.get("next") or DEFAULT_SUCCESS_REDIRECT
+
+    scopes = [
+        "openid",
+        "email",
+        "profile",
+        "https://www.googleapis.com/auth/userinfo.profile",
+        "https://www.googleapis.com/auth/userinfo.email",
+    ]
+    params = {
+        "client_id": CLIENT_ID,
+        "redirect_uri": REDIRECT_URI,
+        "response_type": "code",
+        "scope": " ".join(scopes),
+        "access_type": "online",
+        "include_granted_scopes": "true",
+        "prompt": "consent",
+        "state": state,
+    }
+    auth_url = f"{GOOGLE_AUTH_ENDPOINT}?{urlencode(params)}"
+    return RedirectResponse(url=auth_url, status_code=302)
+
+
+@router.get("/auth")
+async def oauth_callback(request: Request, code: Optional[str] = None, state: Optional[str] = None):
+    """
+    Endpoint de callback do Google OAuth (REDIRECT_URI deve apontar para /auth).
+    Salva usuário na sessão e redireciona para a página pós-login.
+    """
+    _require_oauth_config()
+
+    expected_state = request.session.get("oauth_state")
+    if not state or not expected_state or state != expected_state:
+        # state inválido → previne CSRF
+        raise HTTPException(status_code=400, detail="Estado OAuth inválido.")
+
+    if not code:
+        raise HTTPException(status_code=400, detail="Código OAuth ausente.")
+
+    # Troca 'code' por tokens
+    token_data: Dict[str, Any]
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            token_res = await client.post(
+                GOOGLE_TOKEN_ENDPOINT,
+                data={
+                    "code": code,
+                    "client_id": CLIENT_ID,
+                    "client_secret": CLIENT_SECRET,
+                    "redirect_uri": REDIRECT_URI,
+                    "grant_type": "authorization_code",
+                },
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+            )
+            if token_res.status_code != 200:
+                raise HTTPException(status_code=400, detail=f"Falha ao obter token: {token_res.text}")
+            token_data = token_res.json()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erro de rede/token: {e}")
+
+    access_token = token_data.get("access_token")
+    if not access_token:
+        raise HTTPException(status_code=400, detail="Token inválido recebido.")
+
+    # Busca userinfo
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            ui_res = await client.get(
+                GOOGLE_USERINFO_ENDPOINT,
+                headers={"Authorization": f"Bearer {access_token}"},
+            )
+            if ui_res.status_code != 200:
+                raise HTTPException(status_code=400, detail=f"Falha ao buscar perfil: {ui_res.text}")
+            info = ui_res.json()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Erro de rede/userinfo: {e}")
+
+    if not info.get("email_verified", True):
+        raise HTTPException(status_code=403, detail="E-mail Google não verificado.")
+
+    # Monta o usuário da sessão
+    session_user = _session_user_from_google_info(info)
+    request.session["user"] = session_user
+    # limpeza de estado
+    request.session.pop("oauth_state", None)
+
+    # Redireciona para a página pós-login
+    next_url = request.session.pop("post_login_redirect", DEFAULT_SUCCESS_REDIRECT)
+    return RedirectResponse(url=next_url, status_code=303)

@@ -1,207 +1,112 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Meu Perfil - Ferramenta de Precificação</title>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Meu Perfil</title>
+  <link rel="stylesheet" href="/static/style.css" />
 </head>
-
 <body>
-    <div class="top-green-bar"></div>
-     <nav class="main-nav">
-        <a href="/alertas" id="alertas-link" class="nav-item hidden">Dashboard de Alertas</a>
-        <a href="/calculadora" class="nav-item">Calcular Preço</a>
-        <a href="/lista" class="nav-item">Consultar Precificações</a>
-        <a href="/configuracoes" class="nav-item">Configurações</a>
-        <a href="/regras" id="regras-link" class="nav-item hidden">Gerenciar Regras</a>
-        <a href="/campanhas" id="campanhas-link" class="nav-item hidden">Gerenciar Campanhas</a>
-        <a href="/historico" id="historico-link" class="nav-item hidden">Histórico</a>
-        <a href="/perfil" class="nav-item">Meu Perfil</a>
-        <a href="/admin" id="admin-link" class="nav-item hidden">Admin</a>
-    </nav>
-    <div class="container">
-        <div class="header">
-            <h1>Meu Perfil</h1>
-            <div id="auth-container" class="auth-container hidden">
-                <img id="profile-pic" src="" alt="Foto do Perfil" class="profile-pic">
-                <span id="user-info" class="user-greeting"></span>
-                <button id="logout-btn" class="app-button auth-button logout">Logout</button>
-            </div>
-        </div>
-
-        <div id="initial-loader" class="form-section" style="text-align: center; padding: 40px;">
-            <p>Carregando perfil... <span class="loader-spinner"></span></p>
-        </div>
-
-        <div id="profile-content" class="form-section hidden">
-            <div class="profile-grid">
-                <aside class="profile-picture-section">
-                    <img id="profile-main-pic" src="" alt="Foto do Perfil" class="profile-main-pic">
-                    <div class="upload-btn-wrapper">
-                        <button class="btn-upload" id="upload-btn-label">Alterar Foto</button>
-                        <input type="file" id="photo-upload-input" name="myfile" accept="image/*">
-                    </div>
-                    <small id="upload-status"
-                        style="display: flex; align-items: center; justify-content: center; margin-top: 10px; min-height: 20px;"></small>
-                </aside>
-                <main>
-                    <div class="form-row">
-                        <div class="form-field">
-                            <label>Nome</label>
-                            <input type="text" id="profile-nome" readonly>
-                        </div>
-                        <div class="form-field">
-                            <label>Email</label>
-                            <input type="email" id="profile-email" readonly>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-field">
-                            <label for="profile-telefone">Telefone</label>
-                            <input type="text" id="profile-telefone" placeholder="Seu telefone...">
-                        </div>
-                        <div class="form-field">
-                            <label for="profile-departamento">Departamento</label>
-                            <input type="text" id="profile-departamento" placeholder="Seu departamento...">
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-field">
-                            <label for="profile-membro-desde">Membro Desde</label>
-                            <input type="text" id="profile-membro-desde" readonly>
-                        </div>
-                        <div class="form-field">
-                            <label for="profile-ultimo-login">Último Login</label>
-                            <input type="text" id="profile-ultimo-login" readonly>
-                        </div>
-                    </div>
-                    <div class="button-container">
-                        <button id="save-profile-btn" class="app-button save-button">Salvar Alterações</button>
-                    </div>
-                </main>
-            </div>
-        </div>
+  <!-- Navbar -->
+  <header class="navbar">
+    <div class="navbar-left">
+      <a class="brand" href="/">Ferramenta de Precificação</a>
+      <nav class="navbar-links"><!-- preenchido via app.js --></nav>
     </div>
+    <div class="navbar-right" id="auth-container">
+      <img id="profile-pic" class="avatar" alt="Avatar" />
+      <span id="user-info"></span>
+      <button id="logout-btn" class="app-button danger small">Logout</button>
+    </div>
+  </header>
 
-    <div id="app-modal" class="modal-overlay"></div>
+  <main class="page">
+    <h1>Meu Perfil</h1>
 
-    <script src="/static/app.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            checkAuthStatusAndUpdateNav().then(user => {
-                if (user) {
-                    try {
-                        const elements = {
-                            initialLoader: document.getElementById('initial-loader'),
-                            profileContent: document.getElementById('profile-content'),
-                            profileNome: document.getElementById('profile-nome'),
-                            profileEmail: document.getElementById('profile-email'),
-                            profileTelefone: document.getElementById('profile-telefone'),
-                            profileDepartamento: document.getElementById('profile-departamento'),
-                            profileMembroDesde: document.getElementById('profile-membro-desde'),
-                            profileUltimoLogin: document.getElementById('profile-ultimo-login'),
-                            profileMainPic: document.getElementById('profile-main-pic'),
-                            photoUploadInput: document.getElementById('photo-upload-input'),
-                            uploadBtnLabel: document.getElementById('upload-btn-label'),
-                            uploadStatus: document.getElementById('upload-status'),
-                            saveProfileBtn: document.getElementById('save-profile-btn'),
-                        };
+    <section class="card">
+      <div class="profile-header">
+        <img id="perfil-foto" class="avatar xl" alt="Foto do usuário"/>
+        <div>
+          <h2 id="perfil-nome">—</h2>
+          <p id="perfil-email" class="muted">—</p>
+          <div class="chips" id="perfil-chips"><!-- roles/flags --></div>
+        </div>
+      </div>
+    </section>
 
-                        const loadProfileData = async () => {
-                            try {
-                                const response = await fetch('/api/perfil/meus-dados');
-                                if (!response.ok) throw new Error('Falha ao carregar dados do perfil.');
-                                const data = await response.json();
+    <section class="card">
+      <h2>Detalhes</h2>
+      <div class="kv">
+        <div><span>Autorizado:</span><strong id="perfil-autorizado">—</strong></div>
+        <div><span>Administrador:</span><strong id="perfil-admin">—</strong></div>
+        <div><span>Domínio:</span><strong id="perfil-dominio">—</strong></div>
+      </div>
+    </section>
+  </main>
 
-                                elements.profileNome.value = data.nome || '';
-                                elements.profileEmail.value = data.email || '';
-                                elements.profileTelefone.value = data.telefone || '';
-                                elements.profileDepartamento.value = data.departamento || '';
-                                elements.profileMainPic.src = data.foto_url || `https://placehold.co/150x150/2ecc71/ffffff?text=${data.nome ? data.nome[0] : 'U'}`;
+  <div id="toast-container" class="toast-container"></div>
+  <div id="app-modal" class="modal-overlay"></div>
 
-                                if (data.data_cadastro) {
-                                    elements.profileMembroDesde.value = new Date(data.data_cadastro).toLocaleString('pt-BR');
-                                }
-                                if (data.ultimo_login) {
-                                    elements.profileUltimoLogin.value = new Date(data.ultimo_login).toLocaleString('pt-BR');
-                                }
+  <script src="/static/utils.js"></script>
+  <script src="/static/app.js"></script>
+  <script>
+    (async function () {
+      // espera navbar/status
+      const auth = await checkAuthStatusAndUpdateNav();
 
-                                elements.initialLoader.classList.add('hidden');
-                                elements.profileContent.classList.remove('hidden');
-                            } catch (error) {
-                                console.error(error);
-                                elements.initialLoader.innerHTML = `<p style="color: var(--danger-color);">${error.message}</p>`;
-                            }
-                        };
+      // tenta endpoint dedicado, com fallback para /api/auth/status
+      let data = null;
+      try {
+        data = await safeFetch("/api/perfil/meus-dados");
+      } catch {
+        // ok, seguimos com auth.user
+      }
 
-                        elements.saveProfileBtn.addEventListener('click', async () => {
-                            const payload = {
-                                telefone: elements.profileTelefone.value,
-                                departamento: elements.profileDepartamento.value
-                            };
-                            elements.saveProfileBtn.classList.add('is-loading');
-                            elements.saveProfileBtn.disabled = true;
-                            try {
-                                const response = await fetch('/api/perfil/meus-dados', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify(payload)
-                                });
-                                if (!response.ok) throw new Error((await response.json()).detail || 'Erro ao salvar.');
-                                // SUBSTITUIÇÃO: showAppModal por showToast
-                                showToast('Perfil atualizado com sucesso!');
-                            } catch (error) {
-                                // SUBSTITUIÇÃO: showAppModal por showToast
-                                showToast(error.message, 'error');
-                            } finally {
-                                elements.saveProfileBtn.classList.remove('is-loading');
-                                elements.saveProfileBtn.disabled = false;
-                            }
-                        });
+      const user = (data && data.user) || (auth && auth.user) || {};
+      const nome = user.name || user.display_name || user.email || "Usuário";
+      const email = user.email || "—";
+      const foto = user.picture || "";
+      const roles = Array.isArray(user.roles) ? user.roles : (user.is_admin ? ["admin"] : ["user"]);
+      const autorizado = !!(user.autorizado ?? user.authorized);
+      const isAdmin = !!user.is_admin;
 
-                        elements.photoUploadInput.addEventListener('change', async () => {
-                            const file = elements.photoUploadInput.files[0];
-                            if (!file) return;
-                            const formData = new FormData();
-                            formData.append('file', file);
-                            elements.uploadStatus.innerHTML = 'Enviando... <span class="loader-spinner"></span>';
-                            elements.uploadBtnLabel.disabled = true;
-                            elements.photoUploadInput.disabled = true;
-                            try {
-                                const response = await fetch('/api/perfil/upload-foto', {
-                                    method: 'POST',
-                                    body: formData
-                                });
-                                if (!response.ok) throw new Error((await response.json()).detail || 'Falha no upload.');
-                                const data = await response.json();
-                                elements.profileMainPic.src = data.new_photo_url;
-                                document.getElementById('profile-pic').src = data.new_photo_url;
-                                showToast('Foto alterada com sucesso!');
-                                elements.uploadStatus.innerHTML = '';
-                            } catch (error) {
-                                showToast(error.message, 'error');
-                            } finally {
-                                elements.uploadBtnLabel.disabled = false;
-                                elements.photoUploadInput.disabled = false;
-                            }
-                        });
-                        
-                        setupLogoutButton();
-                        loadProfileData();
-                    } catch (error) {
-                        console.error("Erro ao inicializar a página de perfil:", error);
-                        const container = document.querySelector('.container');
-                        if (container) {
-                            container.innerHTML = '<h1>Ocorreu um erro ao carregar a página.</h1><p>Por favor, tente recarregar ou contate o suporte. Detalhes do erro foram registrados no console.</p>';
-                        }
-                    }
-                }
-            });
-        });
-    </script>
+      const dominio = email.includes("@") ? email.split("@")[1] : "—";
+
+      // preenche UI
+      const $ = (sel) => document.querySelector(sel);
+      $("#perfil-foto").src = foto || "/static/avatar-placeholder.png";
+      $("#perfil-nome").textContent = nome;
+      $("#perfil-email").textContent = email;
+      $("#perfil-autorizado").textContent = autorizado ? "Sim" : "Não";
+      $("#perfil-admin").textContent = isAdmin ? "Sim" : "Não";
+      $("#perfil-dominio").textContent = dominio;
+
+      const chips = $("#perfil-chips");
+      chips.innerHTML = "";
+      roles.forEach(r => {
+        const span = document.createElement("span");
+        span.className = "chip";
+        span.textContent = r;
+        chips.appendChild(span);
+      });
+      if (autorizado) {
+        const span = document.createElement("span");
+        span.className = "chip success";
+        span.textContent = "autorizado";
+        chips.appendChild(span);
+      } else {
+        const span = document.createElement("span");
+        span.className = "chip warn";
+        span.textContent = "não autorizado";
+        chips.appendChild(span);
+      }
+      if (isAdmin) {
+        const span = document.createElement("span");
+        span.className = "chip info";
+        span.textContent = "admin";
+        chips.appendChild(span);
+      }
+    })();
+  </script>
 </body>
-
 </html>

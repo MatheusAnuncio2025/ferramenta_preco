@@ -1,25 +1,20 @@
-# docker-compose.yml
 services:
   web:
     build: .
     ports:
       - "8080:8080"
     env_file:
-      - ./.env
+      - ./.env    # mantenha este arquivo na raiz
     volumes:
-      # Monta a chave da conta de serviço para o BigQuery
-      # Garanta que o arquivo 'gcp-sa-key.json' exista na raiz do projeto ANTES de rodar 'docker-compose up'
+      # chave GCP (opcional em dev; obrigatório se usar BigQuery localmente)
       - type: bind
         source: ./gcp-sa-key.json
         target: /app/gcp-sa-key.json
         read_only: true
-      # Monta a pasta do frontend para que o FastAPI possa servi-la
+      # hot-reload de código (dev)
       - ./static:/app/static
-      # Monta o diretório 'app' inteiro para refletir alterações no código Python sem reconstruir
       - ./app:/app/app
     environment:
-      # Aponta para a chave da conta de serviço montada dentro do contêiner
       GOOGLE_APPLICATION_CREDENTIALS: /app/gcp-sa-key.json
-      # Define a variável PORT para o ambiente local, simulando o Cloud Run
       PORT: 8080
     restart: always

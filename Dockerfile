@@ -1,26 +1,29 @@
-# Use uma imagem base oficial do Python 3.12
 FROM python:3.12-slim
 
-# Defina o diretório de trabalho dentro do contêiner
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
 WORKDIR /app
 
-# Copie o arquivo de dependências primeiro para aproveitar o cache do Docker
+# Dependências do sistema (ex.: compilar libs, se necessário)
+# RUN apt-get update && apt-get install -y --no-install-recommends build-essential && rm -rf /var/lib/apt/lists/*
+
 COPY requirements.txt .
-# Instale as dependências
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copie o resto dos arquivos da sua aplicação
-# Copia a pasta 'app' e a pasta 'static' para dentro do contêiner
+# Copia o código
 COPY ./app /app/app
 COPY ./static /app/static
 
-# Exponha a porta que a aplicação vai rodar (Cloud Run usará a variável $PORT)
+# Cria usuário não-root (mais seguro)
+RUN useradd -m appuser && chown -R appuser:appuser /app
+USER appuser
+
+# Porta default (bate com docker-compose)
 EXPOSE 8080
 
-# Comando para iniciar a aplicação em produção com Gunicorn
-# APONTOS-CHAVE DA CORREÇÃO:
-# --log-level "debug": Aumenta a verbosidade dos logs para vermos mais detalhes.
-# --access-logfile "-": Envia os logs de acesso para a saída padrão (visível no Docker).
-# --error-logfile "-": Envia os logs de erro para a saída padrão.
-# --capture-output: Captura os prints e logs da sua aplicação e os envia para o log de erro do Gunicorn.
+# ====== CMD DEV (verboso) ======
 CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "1", "--worker-class", "uvicorn.workers.UvicornWorker", "--log-level", "debug", "--access-logfile", "-", "--error-logfile", "-", "--capture-output", "app.main:app"]
+
+# ====== CMD PROD (enxuto) ======
+#CMD ["gunicorn", "-k", "uvicorn.workers.UvicornWorker", "-w", "2", "-b", "0.0.0.0:8080", "app.main:app"]

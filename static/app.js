@@ -1,169 +1,164 @@
-/**
- * app.js
- * Utilitários globais de autenticação, navegação e helpers de UI/fetch.
- *
- * Este arquivo NÃO duplica as funções de formatação/modais/toasts.
- * Use as utilidades de UI já definidas em `utils.js`:
- *   - showToast(message, type?)
- *   - showAppModal({ title, bodyHtml, buttons })
- *   - formatCurrency/parseCurrency/formatPercent/parsePercent
- */
+/* ===== app.js – utilitários globais, navbar, auth ===== */
 
-(function () {
-  // =========================
-  // Estado global / usuário
-  // =========================
-  let AUTH_CACHE = null;
-
-  // Compat: aceita tanto `authorized` quanto `autorizado`
-  function isAuthorized(user) {
-    if (!user) return false;
-    if (typeof user.autorizado === "boolean") return user.autorizado;
-    if (typeof user.authorized === "boolean") return user.authorized;
-    // fallback para strings "true"/"false"
-    if (typeof user.autorizado === "string") return user.autorizado === "true";
-    if (typeof user.authorized === "string") return user.authorized === "true";
-    return false;
+/* ---------- Toasts ---------- */
+function ensureToastContainer() {
+  if (!document.getElementById("toast-container")) {
+    const c = document.createElement("div");
+    c.id = "toast-container";
+    c.className = "toast-container";
+    document.body.appendChild(c);
   }
+}
+function showToast(message, type = "success", ms = 3000) {
+  ensureToastContainer();
+  const c = document.getElementById("toast-container");
+  const t = document.createElement("div");
+  t.className = `toast ${type}`;
+  t.textContent = message;
+  c.appendChild(t);
+  setTimeout(() => t.classList.add("show"), 10);
+  setTimeout(() => {
+    t.classList.remove("show");
+    setTimeout(() => t.remove(), 300);
+  }, ms);
+}
 
-  // Wrapper de fetch com tratamento padrão
-  async function safeFetch(url, options = {}) {
-    const res = await fetch(url, options);
-    if (!res.ok) {
-      let detail = "";
-      try {
-        const data = await res.json();
-        detail = data?.detail || data?.message || "";
-      } catch {
-        // ignore
-      }
-      const msg = detail || `${res.status} ${res.statusText}`;
-      const err = new Error(msg);
-      err.status = res.status;
-      err.url = url;
-      throw err;
-    }
-    // tenta json, se falhar, devolve texto
+/* ---------- Modal simples ---------- */
+function showAppModal({ title, bodyHtml, buttons = [] }) {
+  let overlay = document.getElementById("app-modal");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "app-modal";
+    overlay.className = "modal-overlay";
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `
+    <div class="modal">
+      <div class="modal-header"><h3>${title || ""}</h3></div>
+      <div class="modal-body">${bodyHtml || ""}</div>
+      <div class="modal-footer" id="app-modal-actions"></div>
+    </div>`;
+  const actions = overlay.querySelector("#app-modal-actions");
+  (buttons || []).forEach((b) => {
+    const btn = document.createElement("button");
+    btn.className = `app-button ${b.class || ""}`;
+    btn.textContent = b.text || "OK";
+    btn.addEventListener("click", () => {
+      if (typeof b.onClick === "function") b.onClick();
+      overlay.classList.remove("show");
+      setTimeout(() => (overlay.innerHTML = ""), 200);
+    });
+    actions.appendChild(btn);
+  });
+  overlay.classList.add("show");
+}
+
+/* ---------- Miscelânea ---------- */
+function escapeHtml(s) {
+  if (s == null) return "";
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+function formatCurrency(n) {
+  const v = Number(n) || 0;
+  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+/* ---------- Fetch com tratamento padrão ---------- */
+async function safeFetch(url, opts = {}) {
+  const res = await fetch(url, opts);
+  if (!res.ok) {
+    let detail = res.statusText;
     try {
-      return await res.json();
-    } catch {
-      return await res.text();
-    }
+      const data = await res.json();
+      detail = data.detail || JSON.stringify(data);
+    } catch {}
+    throw new Error(`${res.status} ${detail}`);
   }
+  const ct = res.headers.get("content-type") || "";
+  if (ct.includes("application/json")) return res.json();
+  return res.text();
+}
 
-  // =========================
-  // Autenticação / Navbar
-  // =========================
-  async function getAuthStatus(force = false) {
-    if (!force && AUTH_CACHE) return AUTH_CACHE;
-    const data = await safeFetch("/api/auth/status");
-    AUTH_CACHE = data;
-    return data;
-  }
-
-  function updateNavbarUI(user) {
-    const elName = document.getElementById("user-name");
-    const elAvatar = document.getElementById("user-avatar");
-    const elBadge = document.getElementById("auth-badge");
-
-    if (elName) elName.textContent = user?.name ? `Olá, ${user.name}!` : "Olá!";
-    if (elAvatar && user?.picture) {
-      elAvatar.src = user.picture;
-      elAvatar.alt = user.name || "avatar";
-    }
-    if (elBadge) {
-      const ok = isAuthorized(user);
-      elBadge.textContent = ok ? "Autorizado" : "Pendente";
-      elBadge.classList.toggle("badge-ok", ok);
-      elBadge.classList.toggle("badge-pending", !ok);
-    }
-  }
-
-  /**
-   * Verifica login/autorizações e atualiza elementos da navbar.
-   * Não faz redirecionamentos agressivos (o backend já protege as rotas).
-   * Porém, se a página exigir autorização explícita e o usuário não tiver,
-   * redirecionamos para /pendente.
-   */
-  async function checkAuthStatusAndUpdateNav(options = {}) {
-    const { requireAuthorized = false } = options;
-    const data = await getAuthStatus(true);
-
-    if (!data?.authenticated) {
-      // Backend normalmente redireciona, mas garantimos UX no front:
-      if (window.location.pathname !== "/") {
-        window.location.href = "/";
-      }
-      return data;
-    }
-
-    updateNavbarUI(data.user);
-
-    if (requireAuthorized && !isAuthorized(data.user)) {
-      if (window.location.pathname !== "/pendente") {
-        window.location.href = "/pendente";
-      }
-    }
-
-    return data;
-  }
-
-  // Logout
-  function setupLogoutButton() {
-    const btn = document.getElementById("logout-button");
-    if (!btn) return;
-
-    btn.addEventListener("click", async () => {
+/* ---------- Auth/Navbar ---------- */
+function setupLogoutButton() {
+  const btn = document.getElementById("logout-btn");
+  if (btn) {
+    btn.onclick = async () => {
       try {
         await safeFetch("/api/auth/logout", { method: "POST" });
-      } catch (err) {
-        // Mesmo que erro, limpamos sessão client-side e seguimos para login
-        console.warn("Falha ao deslogar no backend:", err);
-      } finally {
-        // limpa cache e volta para login
-        AUTH_CACHE = null;
-        window.location.href = "/";
-      }
-    });
+      } catch {}
+      window.location.href = "/";
+    };
   }
+}
 
-  // =========================
-  // Helpers de página
-  // =========================
+function renderNavbar(auth) {
+  // Containers esperados no header
+  const nav = document.querySelector(".navbar-links") || document.getElementById("navbar-links");
+  const authBox = document.getElementById("auth-container");
+  const userInfo = document.getElementById("user-info");
+  const pic = document.getElementById("profile-pic");
 
-  // Inicialização genérica por pathname (somente o necessário)
-  async function bootByPath() {
-    const path = window.location.pathname;
+  if (authBox) authBox.classList.toggle("hidden", !auth?.authenticated);
 
-    // Páginas comuns autenticadas (navbar, avatar, etc.)
-    if (
-      path !== "/" &&            // login
-      path !== "/pendente"       // página de pendência
-    ) {
-      try {
-        await checkAuthStatusAndUpdateNav(); // sem exigir "authorized"
-      } catch (e) {
-        console.error("Falha ao checar auth status:", e);
-      }
-      setupLogoutButton();
+  if (auth?.authenticated && auth?.user) {
+    const u = auth.user;
+    if (userInfo) userInfo.textContent = `Olá, ${u.name || u.email || "Usuário"}!`;
+    if (pic && u.picture) pic.src = u.picture;
+
+    // monta menu básico; adiciona itens admin se for admin
+    const links = [
+      { href: "/calculadora", text: "Calcular Preço" },
+      { href: "/lista", text: "Consultar Precificações" },
+      { href: "/configuracoes", text: "Configurações" },
+      { href: "/perfil", text: "Meu Perfil" },
+    ];
+    if (u.is_admin) {
+      links.splice(3, 0, { href: "/campanhas", text: "Campanhas" });
+      links.splice(4, 0, { href: "/alertas", text: "Alertas" });
+      links.push({ href: "/admin", text: "Admin" });
     }
 
-    // Páginas específicas podem ter seus próprios scripts
-    // Ex.: calculadora usa pricingLogic.js (initializePricingForm)
-    //     campanhas usa campaignPricingLogic.js, etc.
+    if (nav) {
+      nav.innerHTML = "";
+      links.forEach((l) => {
+        const a = document.createElement("a");
+        a.href = l.href;
+        a.textContent = l.text;
+        nav.appendChild(a);
+      });
+    }
+  } else {
+    if (nav) {
+      nav.innerHTML = "";
+      ["Login"].forEach((t) => {
+        const a = document.createElement("a");
+        a.href = "/login?action=login";
+        a.textContent = t;
+        nav.appendChild(a);
+      });
+    }
   }
+}
 
-  // =========================
-  // Exports globais
-  // =========================
-  window.safeFetch = safeFetch;
-  window.getAuthStatus = getAuthStatus;
-  window.checkAuthStatusAndUpdateNav = checkAuthStatusAndUpdateNav;
-  window.setupLogoutButton = setupLogoutButton;
-  window.isAuthorized = isAuthorized;
+async function checkAuthStatusAndUpdateNav() {
+  try {
+    const auth = await safeFetch("/api/auth/status");
+    renderNavbar(auth);
+    setupLogoutButton();
+    return auth;
+  } catch (e) {
+    console.warn("Falha em /api/auth/status:", e.message);
+    renderNavbar(null);
+    return { authenticated: false };
+  }
+}
 
-  // =========================
-  // Boot
-  // =========================
-  document.addEventListener("DOMContentLoaded", bootByPath);
-})();
+/* ---------- Bootstrap global ---------- */
+document.addEventListener("DOMContentLoaded", () => {
+  // Navbar status em todas as páginas
+  checkAuthStatusAndUpdateNav();
+});

@@ -1,426 +1,46 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Configurações - Ferramenta de Precificação</title>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Configurações</title>
+  <link rel="stylesheet" href="/static/style.css" />
 </head>
-
 <body>
-    <div class="top-green-bar"></div>
-     <nav class="main-nav">
-        <a href="/alertas" id="alertas-link" class="nav-item hidden">Dashboard de Alertas</a>
-        <a href="/calculadora" class="nav-item">Calcular Preço</a>
-        <a href="/lista" class="nav-item">Consultar Precificações</a>
-        <a href="/configuracoes" class="nav-item">Configurações</a>
-        <a href="/regras" id="regras-link" class="nav-item hidden">Gerenciar Regras</a>
-        <a href="/campanhas" id="campanhas-link" class="nav-item hidden">Gerenciar Campanhas</a>
-        <a href="/historico" id="historico-link" class="nav-item hidden">Histórico</a>
-        <a href="/perfil" class="nav-item">Meu Perfil</a>
-        <a href="/admin" id="admin-link" class="nav-item hidden">Admin</a>
-    </nav>
-    <div class="container">
-        <div class="header">
-            <h1>Configurações da Ferramenta</h1>
-            <div id="auth-container" class="auth-container hidden">
-                <img id="profile-pic" src="" alt="Foto do Perfil" class="profile-pic">
-                <span id="user-info" class="user-greeting"></span>
-                <button id="logout-btn" class="app-button auth-button logout">Logout</button>
-            </div>
-        </div>
-
-        <div class="config-grid-container">
-            <aside class="config-sidebar">
-                <h2>Lojas Cadastradas</h2>
-                <div id="lojas-list">
-                    <p style="padding: 15px; color: #777;">Carregando...</p>
-                </div>
-                <button id="add-loja-btn" class="app-button sidebar-button">Adicionar Nova Loja</button>
-            </aside>
-            <main class="config-content">
-
-                <div id="welcome-panel" class="config-card">
-                    <p class="welcome-text">Selecione uma loja na barra lateral para ver ou editar suas configurações,
-                        ou adicione uma nova loja.</p>
-                </div>
-
-                <div id="store-details-panel" class="hidden">
-                    <h2 id="store-details-title"></h2>
-
-                    <div id="regras-fixas-panel" class="config-card hidden">
-                        <h3>Regras de Tarifa Fixa (Mercado Livre)</h3>
-                        <p style="font-size: 0.9rem; color: #555; margin-bottom: 15px;">Estas são as regras de tarifa
-                            fixa aplicadas automaticamente pela calculadora para o Mercado Livre. Elas não são
-                            editáveis.</p>
-                        <div id="regras-fixas-list"></div>
-                    </div>
-
-                    <div class="config-card">
-                        <h3>Alíquotas de Imposto (%)</h3>
-                        <div class="form-row" style="grid-template-columns: 1fr 1fr;">
-                            <div class="form-field">
-                                <label for="aliquota-padrao">Alíquota Padrão</label>
-                                <input type="number" id="aliquota-padrao" step="0.01" placeholder="Ex: 12.5">
-                            </div>
-                            <div class="form-field">
-                                <label for="aliquota-fulfillment">Alíquota Fulfillment</label>
-                                <input type="number" id="aliquota-fulfillment" step="0.01" placeholder="Ex: 10.0">
-                            </div>
-                        </div>
-                    </div>
-                    <div class="config-card">
-                        <h3>Regras de Comissão</h3>
-                        <div id="commission-rules-list"></div>
-                        <div id="add-rule-box" class="add-rule-box">
-                            + Adicionar Nova Regra de Comissão
-                        </div>
-                    </div>
-                    <div class="config-actions-footer">
-                        <button id="delete-store-btn" class="app-button config-button delete-button">Excluir
-                            Loja</button>
-                        <button id="save-store-btn" class="app-button config-button save-button">Salvar
-                            Alterações</button>
-                    </div>
-                </div>
-            </main>
-        </div>
+  <!-- Navbar -->
+  <header class="navbar">
+    <div class="navbar-left">
+      <a class="brand" href="/">Ferramenta de Precificação</a>
+      <nav class="navbar-links"><!-- preenchido via app.js --></nav>
     </div>
+    <div class="navbar-right" id="auth-container">
+      <img id="profile-pic" class="avatar" alt="Avatar" />
+      <span id="user-info"></span>
+      <button id="logout-btn" class="app-button danger small">Logout</button>
+    </div>
+  </header>
 
-    <div id="app-modal" class="modal-overlay"></div>
+  <main class="page">
+    <h1>Configurações</h1>
 
-    <script src="/static/app.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-             checkAuthStatusAndUpdateNav().then((user) => {
-                if (user) {
-                    try {
-                        const lojasList = document.getElementById('lojas-list');
-                        const addLojaBtn = document.getElementById('add-loja-btn');
-                        const welcomePanel = document.getElementById('welcome-panel');
-                        const storeDetailsPanel = document.getElementById('store-details-panel');
-                        const storeDetailsTitle = document.getElementById('store-details-title');
-                        const aliquotaPadraoInput = document.getElementById('aliquota-padrao');
-                        const aliquotaFulfillmentInput = document.getElementById('aliquota-fulfillment');
-                        const commissionRulesList = document.getElementById('commission-rules-list');
-                        const addRuleBox = document.getElementById('add-rule-box');
-                        const saveStoreBtn = document.getElementById('save-store-btn');
-                        const deleteStoreBtn = document.getElementById('delete-store-btn');
-                        const regrasFixasPanel = document.getElementById('regras-fixas-panel');
-                        let currentLojaId = null;
-                        let allStores = [];
-                        
-                        const loadLojas = async () => {
-                            try {
-                                const response = await fetch('/api/config/lojas');
-                                if (!response.ok) throw new Error('Falha ao carregar lojas.');
-                                allStores = await response.json();
-                                renderLojasList();
-                            } catch (error) {
-                                lojasList.innerHTML = `<p style="padding: 15px; color: var(--danger-color);">${error.message}</p>`;
-                            }
-                        };
+    <section class="card">
+      <h2>Lojas</h2>
+      <div id="config-lojas"><!-- preenchido via JS --></div>
+    </section>
 
-                        const renderLojasList = () => {
-                            lojasList.innerHTML = '';
-                            if (allStores.length === 0) {
-                                lojasList.innerHTML = `<p style="padding: 15px; color: #777;">Nenhuma loja cadastrada.</p>`;
-                                return;
-                            }
-                            allStores.forEach(loja => {
-                                const item = document.createElement('div');
-                                item.className = 'sidebar-item';
-                                item.dataset.id = loja.id;
-                                item.innerHTML = `<strong>${loja.marketplace}</strong><span>ID: ${loja.id_loja}</span>`;
-                                if (loja.id === currentLojaId) {
-                                    item.classList.add('active');
-                                }
-                                item.onclick = () => handleLojaSelect(loja.id, `${loja.marketplace} - ${loja.id_loja}`);
-                                lojasList.appendChild(item);
-                            });
-                        };
+    <section class="card">
+      <h2>Regras de Negócio</h2>
+      <div id="config-regras"><!-- preenchido via JS --></div>
+    </section>
+  </main>
 
-                        const loadAndRenderFixedRules = async () => {
-                            const listContainer = document.getElementById('regras-fixas-list');
-                            try {
-                                const response = await fetch('/api/regras-negocio/tarifa-fixa');
-                                if (!response.ok) throw new Error('Não foi possível carregar as regras.');
-                                const regras = await response.json();
-                                let html = '<ul style="list-style-type: none; padding-left: 0;">';
-                                regras.forEach(regra => {
-                                    html += `<li style="margin-bottom: 8px;"><strong>${regra.descricao}:</strong> R$ ${regra.taxa_fixa.toFixed(2)}</li>`;
-                                });
-                                html += '</ul>';
-                                listContainer.innerHTML = html;
-                            } catch (error) {
-                                listContainer.innerHTML = `<span class="text-danger">${error.message}</span>`;
-                            }
-                        };
+  <!-- Containers utilitários -->
+  <div id="toast-container" class="toast-container"></div>
+  <div id="app-modal" class="modal-overlay"></div>
 
-                        const handleLojaSelect = (lojaId, lojaName) => {
-                            currentLojaId = lojaId;
-                            document.querySelectorAll('.sidebar-item').forEach(item => item.classList.remove('active'));
-                            document.querySelector(`.sidebar-item[data-id='${lojaId}']`).classList.add('active');
-                            welcomePanel.classList.add('hidden');
-                            storeDetailsPanel.classList.remove('hidden');
-                            storeDetailsTitle.textContent = `Editando: ${lojaName}`;
-                            const isMercadoLivre = lojaName.toLowerCase().includes('mercado livre');
-                            regrasFixasPanel.classList.toggle('hidden', !isMercadoLivre);
-                            loadLojaDetails(lojaId);
-                        };
-
-                        const loadLojaDetails = async (lojaId) => {
-                            try {
-                                const response = await fetch(`/api/config/lojas/${lojaId}/detalhes`);
-                                if (!response.ok) throw new Error('Falha ao carregar detalhes da loja.');
-                                const details = await response.json();
-                                aliquotaPadraoInput.value = details.aliquota_padrao || '';
-                                aliquotaFulfillmentInput.value = details.aliquota_fulfillment || '';
-                                renderCommissionRules(details.comissoes || []);
-                            } catch (error) {
-                                showAppModal({ title: 'Erro', bodyHtml: `<p>${error.message}</p>`, buttons: [{ text: 'OK', class: 'secondary' }] });
-                            }
-                        };
-
-                        const renderCommissionRules = (rules) => {
-                            commissionRulesList.innerHTML = '';
-                            if (!rules || rules.length === 0) {
-                                commissionRulesList.innerHTML = `<p class="no-rules-text">Nenhuma regra de comissão cadastrada para esta loja.</p>`;
-                            } else {
-                                rules.forEach(rule => {
-                                    const ruleItem = document.createElement('div');
-                                    ruleItem.className = 'commission-rule-item';
-                                    ruleItem.dataset.key = rule.chave;
-                                    ruleItem.innerHTML = `
-                                    <div>
-                                        <div class="rule-name">${rule.chave}</div>
-                                        <div class="rule-values">Clássico: ${rule.classico}% | Premium: ${rule.premium}%</div>
-                                    </div>
-                                    <div class="rule-item-actions">
-                                        <button class="edit-rule-btn">Editar</button>
-                                        <button class="delete-rule-btn">Excluir</button>
-                                    </div>
-                                `;
-                                    commissionRulesList.appendChild(ruleItem);
-                                });
-                            }
-                        };
-
-                        saveStoreBtn.addEventListener('click', async () => {
-                            if (!currentLojaId) return;
-                            saveStoreBtn.classList.add('is-loading');
-                            saveStoreBtn.disabled = true;
-                            const comissoes = Array.from(commissionRulesList.querySelectorAll('.commission-rule-item')).map(item => ({
-                                chave: item.dataset.key,
-                                classico: parseFloat(item.querySelector('.rule-values').textContent.match(/Clássico: ([\d.]+)%/)[1]),
-                                premium: parseFloat(item.querySelector('.rule-values').textContent.match(/Premium: ([\d.]+)%/)[1])
-                            }));
-                            const payload = {
-                                aliquota_padrao: parseFloat(aliquotaPadraoInput.value) || 0,
-                                aliquota_fulfillment: parseFloat(aliquotaFulfillmentInput.value) || 0,
-                                comissoes
-                            };
-                            try {
-                                const response = await fetch(`/api/config/lojas/${currentLojaId}/detalhes`, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify(payload)
-                                });
-                                if (!response.ok) throw new Error((await response.json()).detail || 'Erro ao salvar.');
-                                // SUBSTITUIÇÃO: showAppModal por showToast
-                                showToast('Configurações salvas com sucesso!');
-                            } catch (error) {
-                                showToast(error.message, 'error');
-                            } finally {
-                                saveStoreBtn.classList.remove('is-loading');
-                                saveStoreBtn.disabled = false;
-                            }
-                        });
-                        
-                        const openCommissionRuleModal = (rule = null) => {
-                            const isEditing = rule !== null;
-                            const title = isEditing ? 'Editar Regra de Comissão' : 'Adicionar Nova Regra';
-                            const bodyHtml = `
-                            <div class="form-field">
-                                <label for="rule-key">Nome da Regra (Chave)</label>
-                                <input type="text" id="rule-key" class="form-field" value="${rule ? rule.chave : ''}" ${isEditing ? 'readonly' : ''} placeholder="Ex: Categoria Padrão">
-                            </div>
-                            <div class="form-row" style="grid-template-columns: 1fr 1fr;">
-                                <div class="form-field">
-                                    <label for="rule-classico">Comissão Clássico (%)</label>
-                                    <input type="number" id="rule-classico" step="0.01" value="${rule ? rule.classico : ''}" placeholder="Ex: 11.5">
-                                </div>
-                                <div class="form-field">
-                                    <label for="rule-premium">Comissão Premium (%)</label>
-                                    <input type="number" id="rule-premium" step="0.01" value="${rule ? rule.premium : ''}" placeholder="Ex: 16.5">
-                                </div>
-                            </div>
-                        `;
-                            const buttons = [
-                                { text: 'Cancelar', class: 'secondary' },
-                                {
-                                    text: 'Salvar',
-                                    class: 'primary',
-                                    onClick: () => {
-                                        const newRule = {
-                                            chave: document.getElementById('rule-key').value.trim(),
-                                            classico: parseFloat(document.getElementById('rule-classico').value) || 0,
-                                            premium: parseFloat(document.getElementById('rule-premium').value) || 0
-                                        };
-                                        if (!newRule.chave) {
-                                            showAppModal({ title: 'Erro de Validação', bodyHtml: '<p>O nome da regra é obrigatório.</p>', buttons: [{ text: 'OK', class: 'primary' }] });
-                                            return false;
-                                        }
-                                        let rules = Array.from(commissionRulesList.querySelectorAll('.commission-rule-item')).map(item => ({
-                                            chave: item.dataset.key,
-                                            classico: parseFloat(item.querySelector('.rule-values').textContent.match(/Clássico: ([\d.,]+)%/)[1].replace(',', '.')),
-                                            premium: parseFloat(item.querySelector('.rule-values').textContent.match(/Premium: ([\d.,]+)%/)[1].replace(',', '.'))
-                                        }));
-                                        if (isEditing) {
-                                            rules = rules.map(r => r.chave === newRule.chave ? newRule : r);
-                                        } else {
-                                            if (rules.some(r => r.chave.toLowerCase() === newRule.chave.toLowerCase())) {
-                                                showAppModal({ title: 'Erro de Validação', bodyHtml: '<p>Já existe uma regra com este nome.</p>', buttons: [{ text: 'OK', class: 'primary' }] });
-                                                return false;
-                                            }
-                                            rules.push(newRule);
-                                        }
-                                        renderCommissionRules(rules);
-                                    }
-                                }
-                            ];
-                            showAppModal({ title, bodyHtml, buttons });
-                        };
-
-                        addRuleBox.onclick = () => openCommissionRuleModal();
-                        
-                        commissionRulesList.addEventListener('click', e => {
-                            const target = e.target;
-                            const ruleItem = target.closest('.commission-rule-item');
-                            if (!ruleItem) return;
-                            const chave = ruleItem.dataset.key;
-                            const classico = parseFloat(ruleItem.querySelector('.rule-values').textContent.match(/Clássico: ([\d.,]+)%/)[1].replace(',', '.'));
-                            const premium = parseFloat(ruleItem.querySelector('.rule-values').textContent.match(/Premium: ([\d.,]+)%/)[1].replace(',', '.'));
-                            if (target.classList.contains('edit-rule-btn')) {
-                                openCommissionRuleModal({ chave, classico, premium });
-                            }
-                            if (target.classList.contains('delete-rule-btn')) {
-                                showAppModal({
-                                    title: 'Excluir Regra?',
-                                    bodyHtml: `<p>Tem certeza que deseja excluir a regra "<strong>${chave}</strong>"?</p>`,
-                                    buttons: [
-                                        { text: 'Cancelar', class: 'secondary' },
-                                        { text: 'Excluir', class: 'delete', onClick: () => { ruleItem.remove(); } }
-                                    ]
-                                });
-                            }
-                        });
-
-                        addLojaBtn.onclick = () => {
-                            showAppModal({
-                                title: 'Adicionar Nova Loja',
-                                bodyHtml: `
-                                <div class="form-field">
-                                    <label for="new-marketplace">Marketplace</label>
-                                    <input type="text" id="new-marketplace" placeholder="Ex: Mercado Livre">
-                                </div>
-                                 <div class="form-field">
-                                    <label for="new-id-loja">ID da Loja</label>
-                                    <input type="text" id="new-id-loja" placeholder="Ex: MINHALOJA">
-                                </div>`,
-                                buttons: [
-                                    { text: 'Cancelar', class: 'secondary' },
-                                    {
-                                        text: 'Adicionar',
-                                        class: 'primary',
-                                        onClick: async (button) => {
-                                            const payload = {
-                                                marketplace: document.getElementById('new-marketplace').value.trim(),
-                                                id_loja: document.getElementById('new-id-loja').value.trim()
-                                            };
-                                            if (!payload.marketplace || !payload.id_loja) {
-                                                showAppModal({ title: "Erro de Validação", bodyHtml: "<p>Ambos os campos são obrigatórios.</p>", buttons: [{ text: 'OK', class: 'primary' }] });
-                                                return false;
-                                            }
-                                            button.classList.add('is-loading');
-                                            button.disabled = true;
-                                            try {
-                                                const response = await fetch('/api/config/lojas', {
-                                                    method: 'POST',
-                                                    headers: { 'Content-Type': 'application/json' },
-                                                    body: JSON.stringify(payload)
-                                                });
-                                                if (!response.ok) throw new Error((await response.json()).detail || 'Erro ao adicionar loja.');
-                                                // ATUALIZAÇÃO AJAX: Recarrega a lista de lojas sem F5
-                                                await loadLojas(); 
-                                                showToast('Loja adicionada com sucesso!');
-                                                return true; // Fecha o modal
-                                            } catch (error) {
-                                                showToast(error.message, 'error');
-                                                button.classList.remove('is-loading');
-                                                button.disabled = false;
-                                                return false; // Mantém o modal aberto para correção
-                                            }
-                                        }
-                                    }
-                                ]
-                            });
-                        };
-
-                        deleteStoreBtn.onclick = () => {
-                            if (!currentLojaId) return;
-                            const lojaName = allStores.find(s => s.id === currentLojaId)?.id_loja || 'esta loja';
-                            showAppModal({
-                                title: 'Confirmar Exclusão',
-                                bodyHtml: `<p>Tem certeza que deseja excluir <strong>${lojaName}</strong> e todas as suas configurações? <strong>Esta ação não pode ser desfeita.</strong></p>`,
-                                buttons: [
-                                    { text: 'Cancelar', class: 'secondary' },
-                                    {
-                                        text: 'Excluir Definitivamente',
-                                        class: 'delete',
-                                        onClick: async (button) => {
-                                            button.classList.add('is-loading');
-                                            button.disabled = true;
-                                            try {
-                                                const response = await fetch(`/api/config/lojas/${currentLojaId}`, { method: 'DELETE' });
-                                                if (!response.ok) {
-                                                    const err = await response.json();
-                                                    throw new Error(err.detail || 'Erro no servidor');
-                                                }
-                                                currentLojaId = null;
-                                                storeDetailsPanel.classList.add('hidden');
-                                                welcomePanel.classList.remove('hidden');
-                                                // ATUALIZAÇÃO AJAX
-                                                await loadLojas();
-                                                showToast('Loja excluída com sucesso!');
-                                                return true;
-                                            } catch (error) {
-                                                showToast(error.message, 'error');
-                                                return false;
-                                            }
-                                        }
-                                    }
-                                ]
-                            });
-                        };
-                        
-                        setupLogoutButton();
-                        loadLojas();
-                        loadAndRenderFixedRules();
-
-                    } catch (error) {
-                        console.error("Erro ao inicializar a página de configurações:", error);
-                        const container = document.querySelector('.container');
-                        if (container) {
-                            container.innerHTML = '<h1>Ocorreu um erro ao carregar a página.</h1><p>Por favor, tente recarregar ou contate o suporte. Detalhes do erro foram registrados no console.</p>';
-                        }
-                    }
-                }
-            });
-        });
-    </script>
+  <!-- Scripts -->
+  <script src="/static/utils.js"></script>
+  <script src="/static/app.js"></script>
+  <script src="/static/pricingLogic.js"></script>
 </body>
-
 </html>
